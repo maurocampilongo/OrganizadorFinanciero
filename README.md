@@ -9,6 +9,10 @@ La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en u
 - Auth: Google Identity Services; el backend valida el `idToken` en cada request.
 - Instalable en Android como app independiente (manifest + service worker).
 
+> 📘 **¿Primera vez?** Seguí **[PASO_A_PASO.md](PASO_A_PASO.md)**: 11 pasos con
+> puntos de control, valores exactos y qué hacer ante cada error. Este README es
+> la referencia técnica y el resumen.
+
 ```
 ┌─────────────────────────┐        POST (JSON, text/plain)      ┌──────────────────────────┐
 │  Celular / PWA          │ ──────────────────────────────────► │  Apps Script Web App     │
@@ -27,6 +31,7 @@ La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en u
 │   ├── manifest.json       # PWA standalone, paths relativos
 │   ├── sw.js               # Service Worker (shell offline)
 │   └── icons/              # 192/512 para "any" y "maskable"
+├── PASO_A_PASO.md          # guía de puesta en marcha con puntos de control
 ├── backend/
 │   ├── Code.js             # doPost: auth → Gemini → Sheets (+ setup/selfTest/auditSheet)
 │   ├── appsscript.json     # TZ America/Argentina/Buenos_Aires + webapp
@@ -55,6 +60,9 @@ La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en u
 | 7 | Completar `APP_CONFIG` en `frontend/index.html` | Editor |
 | 8 | Publicar `frontend/` en GitHub Pages | GitHub |
 | 9 | Instalar la PWA desde Chrome en Android | Celular |
+
+> El detalle de cada paso —qué hacer, **qué tenés que ver** y qué hacer si falla—
+> está en **[PASO_A_PASO.md](PASO_A_PASO.md)**.
 
 ---
 
@@ -170,9 +178,16 @@ y `selfTest()` te dice exactamente cuál falta. Las Propiedades del script
    # -> {"ok":true,"version":"1.0.0"}
    ```
 
-> Cada cambio de código necesita una **nueva versión**: `clasp push -f` y después
-> `clasp deploy --description "v2"` (o *Implementar → Administrar implementaciones →
-> Editar → Nueva versión*). La URL `/exec` no cambia si editás la implementación existente.
+> Cada cambio de código necesita una **nueva versión**. `clasp deploy` sin más crea
+> una implementación **nueva con URL nueva**, así que para conservar la `/exec` actual:
+>
+> ```bash
+> clasp deployments                                   # lista los IDs
+> clasp deploy --deploymentId <ID> --description "v2"
+> ```
+>
+> O desde la UI: *Implementar → Administrar implementaciones → ✏️ Editar →
+> Versión: Nueva versión → Implementar*. La URL `/exec` se mantiene.
 
 ---
 
@@ -340,7 +355,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 | La app no ofrece instalarse | falta HTTPS/manifest/SW o ya está instalada | abrí la URL de Pages en Chrome, no un archivo local |
 | Las fechas se corren un día | zona horaria del script o de la planilla | ambas deben ser `America/Argentina/Buenos_Aires` |
 | “No pudimos guardar el gasto” + log “Sin planilla” | `SHEET_ID` incorrecto o sin permisos | revisá el ID y que la cuenta del script tenga acceso |
-| Los cambios no se ven | falta nueva versión o caché del SW | `clasp deploy` y recargá dos veces |
+| Los cambios no se ven | falta nueva versión o caché del SW | deployá una versión nueva (`--deploymentId`) y recargá dos veces |
 
 ## Costos
 
