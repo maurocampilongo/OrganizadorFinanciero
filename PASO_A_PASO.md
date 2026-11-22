@@ -6,6 +6,9 @@ Guía para dejar la app funcionando desde cero, sin adivinar. Cada paso tiene
 Tiempo estimado: 30–40 minutos la primera vez. Después, actualizar el código
 son 2 comandos.
 
+> 🖐️ **¿No querés usar terminal?** El paso 5 tiene una **alternativa sin `clasp`**
+> (copiar y pegar el código en el editor de Apps Script): no necesitás instalar nada.
+
 ---
 
 ## 0. Mapa mental: quién hace qué
@@ -216,6 +219,29 @@ aparecen los dos archivos. Si no ves `appsscript.json`, activá
 
 > `.clasp.json` y `.clasprc.json` son **credenciales locales**: ya están en
 > `.gitignore`. No los subas, no los pegues en ningún lado.
+
+---
+
+### Alternativa sin terminal (copiar y pegar)
+
+Si no querés instalar `clasp` (por ejemplo, porque trabajás desde el navegador), podés
+hacer lo mismo en 4 minutos:
+
+1. Abrí tu proyecto en <https://script.google.com>.
+2. Abrí el archivo `backend/Code.js` del repo en GitHub y copiá **todo** el contenido
+   (botón *Copy* o `Ctrl+A` / `Ctrl+C`).
+   Enlace directo: `https://github.com/TU_USUARIO/TU_REPO/blob/main/backend/Code.js`
+3. En el editor de Apps Script hacé clic dentro de `Código.gs` (o `Code.gs`),
+   seleccioná todo (`Ctrl+A`) y pegá (`Ctrl+V`). Guardá (`Ctrl+S`).
+4. **Configuración del proyecto → Zona horaria** → `(GMT-03:00) Buenos Aires`.
+   Si no pegás `appsscript.json`, esta zona horaria **es obligatoria**: define qué es “hoy”.
+5. Cargá las 4 Script Properties (paso 6) y corré `setup()` y `selfTest()` (paso 7).
+6. Implementá como Aplicación web (paso 8). El `appsscript.json` **no es necesario**:
+   los permisos se detectan solos al autorizar y el acceso se elige en la implementación.
+
+> ¿Y `appsscript.json`? Solo hace falta si querés que el proyecto tenga exactamente los
+> metadatos del repo (TZ, scopes y `access` declarados). Se pega desde
+> *Configuración del proyecto → Mostrar archivo de manifiesto*, pero es opcional.
 
 ---
 
