@@ -1,0 +1,28 @@
+# --- Apps Script / clasp (credenciales locales, NUNCA subir) ---
+.clasprc.json
+.clasprc.json.*
+.clasprc
+backend/.clasp.json
+.clasp.json
+
+# --- Secretos ---
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+
+# --- Sistema operativo / editores ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# --- Logs y temporales ---
+*.log
+npm-debug.log*
+tmp/
+
+# --- Datos locales del agente (no forman parte del proyecto) ---
+.cline-home/

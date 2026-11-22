@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Gastos — Organizador Financiero</title>
+  <meta name="description" content="Registrá gastos personales desde el celular con foto del ticket y guardado en Google Sheets.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gastos">
+  <!--
+    CSP: sin recursos externos salvo Google Identity Services y el backend.
+    'unsafe-inline' es necesario porque el JS/CSS de la app está embebido
+    (GitHub Pages no permite enviar headers). No se usan handlers inline.
+    NO se incluye frame-ancestors porque el navegador lo ignora en <meta>.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data:; font-src 'self'; connect-src 'self' https://accounts.google.com/gsi/ https://script.google.com https://script.googleusercontent.com; frame-src https://accounts.google.com/gsi/; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121a25;
+      --card-2: #0e1620;
+      --line: #223044;
+      --line-soft: #1a2433;
+      --text: #e8eef7;
+      --muted: #93a3b8;
+      --accent: #f5b301;
+      --accent-2: #ffd166;
+      --ok: #2fbf71;
+      --err: #ff6b6b;
+      --radius: 14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      padding: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+      background: radial-gradient(1100px 520px at 50% -12%, #17222f 0%, var(--bg) 58%) no-repeat, var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .app { width: 100%; max-width: 520px; margin: 0 auto; }
+
+    h1, h2 { margin: 0; font-size: 1.06rem; font-weight: 650; letter-spacing: -0.01em; }
+    p { margin: 0; }
+
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .logo {
+      display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 auto;
+      border-radius: 12px; background: linear-gradient(160deg, var(--accent-2), #d38b00);
+      color: #1a1400; font-weight: 800; font-size: 1.15rem;
+    }
+    .brand-text { display: flex; flex-direction: column; min-width: 0; }
+    .brand-title { font-weight: 700; font-size: 1.05rem; line-height: 1.15; }
+    .brand-sub { color: var(--muted); font-size: 0.76rem; text-transform: capitalize; }
+    .userbox { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .email { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.76rem; }
+
+    .card {
+      background: linear-gradient(180deg, #141d29 0%, var(--card) 100%);
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+    }
+    .card + .card { margin-top: 14px; }
+    .card-title { margin-bottom: 6px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 0.85rem; }
+    .tiny { font-size: 0.74rem; }
+
+    .banner {
+      border-radius: 12px; padding: 11px 13px; font-size: 0.87rem; line-height: 1.4;
+      margin: 0 0 14px; border: 1px solid transparent;
+    }
+    .banner-warn { background: rgba(245, 179, 1, 0.12); border-color: rgba(245, 179, 1, 0.45); color: #ffd76a; }
+    .banner-err { background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.5); color: #ffb3b3; }
+    .banner[hidden] { display: none; }
+
+    .gsi-slot { margin: 16px 0 8px; min-height: 44px; display: flex; }
+
+    .capture { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .capture .btn { width: auto; flex: 1 1 200px; }
+    .hint { color: var(--muted); font-size: 0.8rem; flex: 1 1 100%; }
+    .thumb-wrap { flex: 1 1 100%; }
+    .thumb-wrap[hidden] { display: none; }
+    .thumb-wrap img {
+      display: block; max-width: 100%; max-height: 170px; border-radius: 10px;
+      border: 1px solid var(--line); background: #fff;
+    }
+
+    .field { margin-bottom: 14px; }
+    label {
+      display: block; margin-bottom: 6px; color: var(--muted);
+      font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+
+    input, select {
+      width: 100%; min-height: 50px; padding: 12px 14px;
+      background: var(--card-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 12px;
+      font: inherit; font-size: 16px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    input::placeholder { color: #5f7690; }
+    select { color-scheme: dark; }
+    input[type="date"] { color-scheme: dark; min-width: 0; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); cursor: pointer; }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245, 179, 1, 0.16); outline: none; }
+    input.autofilled, select.autofilled { border-color: rgba(47, 191, 113, 0.85); box-shadow: 0 0 0 3px rgba(47, 191, 113, 0.16); }
+
+    .date-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 8px; align-items: stretch; }
+    .step {
+      min-height: 50px; border-radius: 12px; border: 1px solid var(--line);
+      background: #1b2634; color: var(--text); font-size: 0.95rem; cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .step:active { background: #243244; }
+
+    .money { position: relative; }
+    .money-prefix {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-weight: 600; pointer-events: none;
+    }
+    .money input { padding-left: 32px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; min-height: 52px; padding: 13px 16px;
+      border-radius: 12px; border: 1px solid transparent;
+      font: inherit; font-size: 1rem; font-weight: 650; cursor: pointer;
+      transition: transform 0.05s ease, filter 0.15s ease;
+    }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { opacity: 0.55; cursor: default; }
+    .btn-primary { background: linear-gradient(180deg, var(--accent-2), var(--accent)); color: #231a00; }
+    .btn-secondary { background: #1b2634; border-color: var(--line); color: var(--text); }
+
+    .ghost {
+      min-height: 38px; padding: 8px 12px; border-radius: 10px;
+      background: transparent; border: 1px solid var(--line); color: var(--muted);
+      font: inherit; font-size: 0.8rem; cursor: pointer;
+    }
+    .ghost:active { background: #1b2634; }
+    .ghost[hidden] { display: none; }
+
+    .status { min-height: 1.3em; margin-top: 10px; font-size: 0.88rem; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.error { color: var(--err); }
+
+    .footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; }
+
+    [hidden] { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">$</span>
+        <span class="brand-text">
+          <span class="brand-title">Gastos</span>
+          <span class="brand-sub" id="today-label">&nbsp;</span>
+        </span>
+      </div>
+      <div class="userbox" id="userbox" hidden>
+        <span class="email" id="user-email"></span>
+        <button type="button" class="ghost" id="btn-logout">Salir</button>
+      </div>
+    </header>
+
+    <div class="banner banner-err" id="config-warning" hidden></div>
+    <div class="banner banner-warn" id="offline-badge" hidden>Sin conexión: no se puede guardar.</div>
+
+    <main>
+      <section class="card" id="login-card">
+        <h1 class="card-title">Ingresá para cargar gastos</h1>
+        <p class="muted small">Solo la cuenta de Google autorizada puede escribir en la planilla.</p>
+        <div class="gsi-slot" id="gsi-button"></div>
+        <p class="status" id="login-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="card" id="app-card" hidden>
+        <div class="capture">
+          <input type="file" id="foto" accept="image/*" capture="environment" hidden>
+          <button type="button" class="btn btn-secondary" id="btn-foto">
+            <span aria-hidden="true">📷</span> Foto del ticket
+          </button>
+          <span class="hint" id="foto-status" role="status" aria-live="polite">Opcional: sacá o subí una foto y completamos los campos.</span>
+          <div class="thumb-wrap" id="thumb-wrap" hidden>
+            <img id="thumb" alt="Vista previa del comprobante" decoding="async">
+          </div>
+        </div>
+
+        <div class="banner banner-warn" id="review-banner" hidden></div>
+
+        <form id="expense-form" novalidate autocomplete="off">
+          <div class="field">
+            <label for="fecha">Fecha</label>
+            <div class="date-row">
+              <button type="button" class="step" id="btn-prev-day" aria-label="Un día antes">◀</button>
+              <input type="date" id="fecha" name="fecha" required>
+              <button type="button" class="step" id="btn-next-day" aria-label="Un día después">▶</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="concepto">Concepto</label>
+            <input type="text" id="concepto" name="concepto" maxlength="120" placeholder="Ej.: Coto, nafta, luz" autocomplete="off" autocapitalize="sentences" enterkeyhint="next" required>
+          </div>
+
+          <div class="field">
+            <label for="monto">Monto</label>
+            <div class="money">
+              <span class="money-prefix" aria-hidden="true">$</span>
+              <input type="number" id="monto" name="monto" inputmode="decimal" step="0.01" min="0.01" placeholder="0,00" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="categoria">Categoría</label>
+            <select id="categoria" name="categoria" required></select>
+          </div>
+
+          <div class="field">
+            <label for="persona">¿Quién hizo el gasto?</label>
+            <select id="persona" name="persona" required></select>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btn-save">Guardar gasto</button>
+          <p class="status" id="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.0.0</span></span>
+    </footer>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    'use strict';
+
+    /* ======================================================================
+     * APP_CONFIG — ÚNICO bloque que hay que editar antes de publicar.
+     * No pongas secretos acá: el Client ID es público por diseño y la API key
+     * de Gemini vive solo en las Propiedades del script del backend.
+     * ==================================================================== */
+    const APP_CONFIG = {
+      CLIENT_ID: 'PEGAR_CLIENT_ID.apps.googleusercontent.com',
+      BACKEND_URL: 'PEGAR_URL_EXEC_DE_APPS_SCRIPT',
+      CATEGORIAS: ['Supermercado', 'Servicios', 'Transporte', 'Salidas', 'Salud', 'Hogar', 'Otros'],
+      PERSONAS: ['Mauro', 'Compartido'],
+      MAX_IMAGE_WIDTH: 1024,
+      JPEG_QUALITY: 0.75,
+      MAX_FILE_MB: 25,
+      SESSION_KEY: 'of.sesion.v1',
+      FETCH_TIMEOUT_MS: 45000,
+      EXTRACT_TIMEOUT_MS: 60000,
+      EXPIRY_MARGIN_MS: 60000
+    };
+
+    const VERSION = '1.0.0';
+
+    const state = {
+      token: null,
+      exp: 0,
+      email: '',
+      expiryTimer: null,
+      busy: false,
+      installPrompt: null,
+      thumbUrl: ''
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    class ApiError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.name = 'ApiError';
+        this.code = code;
+      }
+    }
+
+    /* ======================================================================
+     * Utilidades generales
+     * ==================================================================== */
+
+    function pad2(value) {
+      return String(value).padStart(2, '0');
+    }
+
+    /** Fecha local YYYY-MM-DD (nunca toISOString: evita el corrimiento UTC). */
+    function toLocalIso(date) {
+      return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+    }
+
+    function isoToLocalDate(iso) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+      if (!match) return new Date();
+      // Mediodía local: inmune a los cambios de horario (DST).
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+    }
+
+    function shiftIsoDate(iso, days) {
+      const base = isoToLocalDate(iso);
+      const next = new Date(base.getFullYear(), base.getMonth(), base.getDate() + Number(days), 12, 0, 0, 0);
+      return toLocalIso(next);
+    }
+
+    function formatLongDate(date) {
+      try {
+        return new Intl.DateTimeFormat('es-AR', {
+          weekday: 'long', day: 'numeric', month: 'long'
+        }).format(date);
+      } catch (err) {
+        return toLocalIso(date);
+      }
+    }
+
+    function formatKb(bytes) {
+      const n = Number(bytes) || 0;
+      if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+      return Math.max(1, Math.round(n / 1024)) + ' KB';
+    }
+
+    function parseMonto(raw) {
+      let text = String(raw === null || raw === undefined ? '' : raw).trim().replace(/\s/g, '');
+      if (!text) return NaN;
+      if (text.indexOf(',') > -1) text = text.replace(/\./g, '').replace(',', '.');
+      const value = Number(text);
+      return isFinite(value) ? Math.round(value * 100) / 100 : NaN;
+    }
+
+    function decodeJwtPayload(jwt) {
+      const parts = String(jwt || '').split('.');
+      if (parts.length !== 3) return null;
+      try {
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4 !== 0) base64 += '=';
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const payload = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+        return payload && typeof payload === 'object' ? payload : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /** Solo aceptamos la URL /exec de una Web App de Apps Script (https). */
+    function isTrustedBackendUrl(url) {
+      return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/.test(String(url || '').trim());
+    }
+
+    function configProblems() {
+      const problems = [];
+      if (!/^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/i.test(String(APP_CONFIG.CLIENT_ID || '').trim())) {
+        problems.push('APP_CONFIG.CLIENT_ID');
+      }
+      if (!isTrustedBackendUrl(APP_CONFIG.BACKEND_URL)) problems.push('APP_CONFIG.BACKEND_URL');
+      return problems;
+    }
+
+    /* ======================================================================
+     * Mensajes en pantalla
+     * ==================================================================== */
+
+    function setStatus(element, message, kind) {
+      if (!element) return;
+      element.textContent = message || '';
+      element.classList.remove('ok', 'error');
+      if (kind === 'ok') element.classList.add('ok');
+      if (kind === 'error') element.classList.add('error');
+    }
+
+    function setLoginStatus(message, kind) { setStatus($('login-status'), message, kind); }
+    function setFormStatus(message, kind) { setStatus($('form-status'), message, kind); }
+    function setFotoStatus(message, kind) { setStatus($('foto-status'), message, kind); }
+
+    function showConfigWarning() {
+      const problems = configProblems();
+      const banner = $('config-warning');
+      if (!problems.length) { banner.hidden = true; return; }
+      banner.textContent = 'Falta configurar ' + problems.join(' y ') + ' en este archivo (ver README, paso 4).';
+      banner.hidden = false;
+    }
+
+    /* ======================================================================
+     * Sesión con Google Identity Services
+     * ==================================================================== */
+
+    function saveSession(token, payload) {
+      state.token = token;
+      state.exp = Number(payload.exp) * 1000;
+      state.email = String(payload.email || '');
+      try {
+        sessionStorage.setItem(APP_CONFIG.SESSION_KEY, JSON.stringify({
+          token: state.token,
+          exp: state.exp,
+          email: state.email
+        }));
+      } catch (err) { /* modo privado: seguimos solo en memoria */ }
+    }
+
+    function clearSession() {
+      state.token = null;
+      state.exp = 0;
+      state.email = '';
+      if (state.expiryTimer) {
+        clearTimeout(state.expiryTimer);
+        state.expiryTimer = null;
+      }
+      try { sessionStorage.removeItem(APP_CONFIG.SESSION_KEY); } catch (err) { /* ignorado */ }
+    }
+
+    function setSignedIn(signedIn) {
+      $('login-card').hidden = signedIn;
+      $('app-card').hidden = !signedIn;
+      $('userbox').hidden = !signedIn;
+      $('user-email').textContent = signedIn ? (state.email || 'Sesión iniciada') : '';
+    }
+
+    function scheduleExpiry() {
+      if (state.expiryTimer) clearTimeout(state.expiryTimer);
+      const remaining = state.exp - Date.now() - APP_CONFIG.EXPIRY_MARGIN_MS;
+      if (remaining <= 0) { handleAuthFailure(); return; }
+      state.expiryTimer = setTimeout(() => handleAuthFailure(), Math.min(remaining, 2147483647));
+    }
+
+    function handleAuthFailure() {
+      clearSession();
+      setSignedIn(false);
+      setLoginStatus('Tu sesión venció. Volvé a ingresar con Google.', 'error');
+    }
+
+    function handleCredential(response) {
+      const credential = response && response.credential;
+      const payload = decodeJwtPayload(credential);
+      if (!payload || !payload.exp || !payload.email) {
+        setLoginStatus('No pudimos validar la respuesta de Google. Probá de nuevo.', 'error');
+        return;
+      }
+      if (Number(payload.exp) * 1000 <= Date.now() + APP_CONFIG.EXPIRY_MARGIN_MS) {
+        setLoginStatus('El token de Google llegó vencido. Reintentá.', 'error');
+        return;
+      }
+      saveSession(credential, payload);
+      setSignedIn(true);
+      setLoginStatus('');
+      scheduleExpiry();
+    }
+
+    function restoreSession() {
+      let stored = null;
+      try { stored = JSON.parse(sessionStorage.getItem(APP_CONFIG.SESSION_KEY) || 'null'); } catch (err) { stored = null; }
+      if (!stored || typeof stored.token !== 'string' || !stored.token) return;
+
+      const payload = decodeJwtPayload(stored.token);
+      const exp = Number(stored.exp) || (payload && Number(payload.exp) * 1000) || 0;
+      if (!exp || exp - APP_CONFIG.EXPIRY_MARGIN_MS <= Date.now()) {
+        clearSession();
+        return;
+      }
+      state.token = stored.token;
+      state.exp = exp;
+      state.email = String(stored.email || (payload && payload.email) || '');
+      setSignedIn(true);
+      scheduleExpiry();
+    }
+
+    function logout() {
+      clearSession();
+      setSignedIn(false);
+      setLoginStatus('Sesión cerrada.', 'ok');
+      try {
+        if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+      } catch (err) { /* ignorado */ }
+    }
+
+    function waitForGis(timeoutMs) {
+      return new Promise((resolve, reject) => {
+        const started = Date.now();
+        (function tick() {
+          if (window.google && google.accounts && google.accounts.id) { resolve(); return; }
+          if (Date.now() - started > (timeoutMs || 12000)) {
+            reject(new Error('No se pudo cargar Google Identity Services. Revisá tu conexión.'));
+            return;
+          }
+          setTimeout(tick, 120);
+        })();
+      });
+    }
+
+    async function initAuth() {
+      if (configProblems().length) {
+        setLoginStatus('Completá la configuración (ver el aviso rojo) para poder ingresar.', 'error');
+        return;
+      }
+      try {
+        await waitForGis(12000);
+      } catch (err) {
+        setLoginStatus(err.message, 'error');
+        return;
+      }
+
+      window.google.accounts.id.initialize({
+        client_id: APP_CONFIG.CLIENT_ID,
+        callback: handleCredential,
+        ux_mode: 'popup',
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      window.google.accounts.id.renderButton($('gsi-button'), {
+        type: 'standard',
+        theme: 'filled_black',
+        size: 'large',
+        shape: 'pill',
+        text: 'signin_with',
+        logo_alignment: 'left',
+        locale: 'es',
+        width: 280
+      });
+
+      try { window.google.accounts.id.disableAutoSelect(); } catch (err) { /* ignorado */ }
+    }
+
+    /* ======================================================================
+     * Cliente del backend de Apps Script
+     * ==================================================================== */
+
+    async function api(action, payload, timeoutMs) {
+      const url = String(APP_CONFIG.BACKEND_URL || '').trim();
+      if (!isTrustedBackendUrl(url)) {
+        throw new ApiError('CONFIG', 'Falta configurar la URL del backend (/exec).');
+      }
+      if (!state.token) throw new ApiError('AUTH', 'Sesión no iniciada.');
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || APP_CONFIG.FETCH_TIMEOUT_MS);
+      let response;
+
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          // text/plain evita el preflight OPTIONS que Apps Script no responde.
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(Object.assign({ action: action, idToken: state.token }, payload || {})),
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'follow',
+          referrerPolicy: 'no-referrer',
+          signal: controller.signal
+        });
+      } catch (err) {
+        if (err && err.name === 'AbortError') {
+          throw new ApiError('TIMEOUT', 'La operación tardó demasiado. Reintentá.');
+        }
+        throw new ApiError('NETWORK', 'No pudimos conectar con el servidor. Revisá tu conexión.');
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const text = await response.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch (err) { data = null; }
+
+      if (data && data.ok === false) {
+        if (data.error === 'AUTH') handleAuthFailure();
+        throw new ApiError(String(data.error || 'SERVER'), String(data.message || 'No pudimos completar la operación.'));
+      }
+      if (!response.ok || !data || data.ok !== true) {
+        throw new ApiError('SERVER', 'Respuesta inesperada del servidor. Reintentá.');
+      }
+      return data;
+    }
+
+    /* ======================================================================
+     * Foto: compresión en canvas antes de mandarla
+     * ==================================================================== */
+
+    function loadImageElement(file) {
+      return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => { URL.revokeObjectURL(objectUrl); resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('No pudimos leer la imagen.')); };
+        image.src = objectUrl;
+      });
+    }
+
+    function loadBitmap(file) {
+      if (typeof createImageBitmap === 'function') {
+        return createImageBitmap(file).catch(() => loadImageElement(file));
+      }
+      return loadImageElement(file);
+    }
+
+    /** Devuelve la imagen comprimida en JPEG base64 (sin prefijo data:). */
+    async function compressImage(file) {
+      if (!file || !/^image\//.test(file.type || '')) throw new Error('Elegí una imagen válida.');
+      if (file.size > APP_CONFIG.MAX_FILE_MB * 1024 * 1024) {
+        throw new Error('La foto supera los ' + APP_CONFIG.MAX_FILE_MB + ' MB.');
+      }
+
+      const bitmap = await loadBitmap(file);
+      const width = bitmap.width || bitmap.naturalWidth;
+      const height = bitmap.height || bitmap.naturalHeight;
+      if (!width || !height) throw new Error('No pudimos leer el tamaño de la imagen.');
+
+      const scale = Math.min(1, APP_CONFIG.MAX_IMAGE_WIDTH / width);
+      const targetWidth = Math.max(1, Math.round(width * scale));
+      const targetHeight = Math.max(1, Math.round(height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Este navegador no puede procesar la imagen.');
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, targetWidth, targetHeight);
+      context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+      if (typeof bitmap.close === 'function') bitmap.close();
+
+      const dataUrl = canvas.toDataURL('image/jpeg', APP_CONFIG.JPEG_QUALITY);
+      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+      if (!base64) throw new Error('No pudimos comprimir la imagen.');
+
+      return {
+        base64: base64,
+        mimeType: 'image/jpeg',
+        dataUrl: dataUrl,
+        width: targetWidth,
+        height: targetHeight,
+        bytes: Math.round(base64.length * 0.75)
+      };
+    }
+
+    function showThumbnail(dataUrl) {
+      state.thumbUrl = dataUrl;
+      const image = $('thumb');
+      image.src = dataUrl;
+      $('thumb-wrap').hidden = false;
+    }
+
+    function hideThumbnail() {
+      state.thumbUrl = '';
+      $('thumb').removeAttribute('src');
+      $('thumb-wrap').hidden = true;
+    }
+
+    async function onPhotoSelected(event) {
+      const input = event.target;
+      const file = input.files && input.files[0];
+      if (!file || state.busy) return;
+
+      setBusy(true, 'Leyendo ticket…');
+      setFotoStatus('Comprimiendo la foto…');
+      try {
+        const compressed = await compressImage(file);
+        showThumbnail(compressed.dataUrl);
+        setFotoStatus('Foto lista (' + formatKb(file.size) + ' → ' + formatKb(compressed.bytes) + '). Leyendo con IA…');
+
+        const result = await api('extract', {
+          image: compressed.base64,
+          mimeType: compressed.mimeType
+        }, APP_CONFIG.EXTRACT_TIMEOUT_MS);
+
+        applyExtraction(result.data, result.warnings);
+        setFotoStatus('Datos extraídos. Revisalos antes de guardar.', 'ok');
+      } catch (err) {
+        setFotoStatus(err && err.message ? err.message : 'No pudimos procesar la foto.', 'error');
+      } finally {
+        setBusy(false);
+        input.value = '';
+      }
+    }
+
+    /* ======================================================================
+     * Formulario: fecha, selects, extracción y guardado
+     * ==================================================================== */
+
+    function fillSelect(select, values) {
+      select.replaceChildren();
+      values.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    }
+
+    function clearAutofillMarks() {
+      document.querySelectorAll('.autofilled').forEach((element) => element.classList.remove('autofilled'));
+    }
+
+    function hideReviewBanner() {
+      const banner = $('review-banner');
+      banner.hidden = true;
+      banner.textContent = '';
+    }
+
+    function applyExtraction(data, warnings) {
+      const source = data && typeof data === 'object' ? data : {};
+      const fecha = $('fecha');
+      const concepto = $('concepto');
+      const monto = $('monto');
+      const categoria = $('categoria');
+      const persona = $('persona');
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(source.fecha || ''))) {
+        fecha.value = source.fecha;
+        fecha.classList.add('autofilled');
+      }
+
+      if (source.concepto) {
+        concepto.value = String(source.concepto).slice(0, 120);
+        concepto.classList.add('autofilled');
+      }
+
+      const amount = Number(source.monto);
+      if (isFinite(amount) && amount > 0) {
+        monto.value = amount.toFixed(2);
+        monto.classList.add('autofilled');
+      } else {
+        monto.value = '';
+      }
+
+      if (APP_CONFIG.CATEGORIAS.indexOf(source.categoria) > -1) {
+        categoria.value = source.categoria;
+        categoria.classList.add('autofilled');
+      }
+      if (APP_CONFIG.PERSONAS.indexOf(source.persona) > -1) {
+        persona.value = source.persona;
+        persona.classList.add('autofilled');
+      }
+
+      const notes = Array.isArray(warnings) && warnings.length ? ' ' + warnings.join(' ') : '';
+      const banner = $('review-banner');
+      banner.textContent = 'Revisá y corregí los datos extraídos antes de guardar.' + notes;
+      banner.hidden = false;
+
+      try { $('app-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
+      if (!concepto.value) concepto.focus(); else monto.focus();
+    }
+
+    function readForm() {
+      return {
+        fecha: $('fecha').value,
+        concepto: $('concepto').value.trim(),
+        monto: parseMonto($('monto').value),
+        categoria: $('categoria').value,
+        persona: $('persona').value
+      };
+    }
+
+    function validate(data) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.fecha || ''))) return 'Elegí una fecha válida.';
+      if (!data.concepto) return 'Escribí un concepto.';
+      if (data.concepto.length > 120) return 'El concepto es demasiado largo (máximo 120).';
+      if (!isFinite(data.monto) || data.monto <= 0) return 'Ingresá un monto mayor a cero.';
+      if (data.monto > 100000000) return 'El monto es demasiado alto.';
+      if (APP_CONFIG.CATEGORIAS.indexOf(data.categoria) === -1) return 'Elegí una categoría.';
+      if (APP_CONFIG.PERSONAS.indexOf(data.persona) === -1) return 'Elegí quién hizo el gasto.';
+      return '';
+    }
+
+    function setBusy(busy, label) {
+      state.busy = Boolean(busy);
+      ['btn-save', 'btn-foto', 'btn-prev-day', 'btn-next-day', 'foto'].forEach((id) => {
+        const element = $(id);
+        if (element) element.disabled = state.busy;
+      });
+      $('btn-save').textContent = state.busy ? (label || 'Guardando…') : 'Guardar gasto';
+    }
+
+    function resetAfterSave() {
+      // Conservamos fecha, categoría y persona: es lo habitual al cargar
+      // varios tickets del mismo día.
+      $('concepto').value = '';
+      $('monto').value = '';
+      hideThumbnail();
+      setFotoStatus('Opcional: sacá o subí una foto y completamos los campos.');
+      clearAutofillMarks();
+      hideReviewBanner();
+      $('concepto').focus();
+    }
+
+    async function onSubmit(event) {
+      event.preventDefault();
+      if (state.busy) return;
+      if (!state.token) {
+        setFormStatus('Iniciá sesión para guardar.', 'error');
+        return;
+      }
+
+      const data = readForm();
+      const problem = validate(data);
+      if (problem) {
+        setFormStatus(problem, 'error');
+        return;
+      }
+      if (!navigator.onLine) {
+        setFormStatus('Sin conexión: el gasto no se puede guardar.', 'error');
+        return;
+      }
+
+      setBusy(true, 'Guardando…');
+      setFormStatus('Guardando…');
+      try {
+        const result = await api('save', data, APP_CONFIG.FETCH_TIMEOUT_MS);
+        setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
+        resetAfterSave();
+      } catch (err) {
+        setFormStatus(err && err.message ? err.message : 'No pudimos guardar el gasto.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    /* ======================================================================
+     * Arranque
+     * ==================================================================== */
+
+    function initDateField() {
+      const input = $('fecha');
+      input.value = toLocalIso(new Date());
+      $('today-label').textContent = formatLongDate(new Date());
+
+      $('btn-prev-day').addEventListener('click', () => {
+        input.value = shiftIsoDate(input.value, -1);
+        input.classList.remove('autofilled');
+      });
+      $('btn-next-day').addEventListener('click', () => {
+        input.value = shiftIsoDate(input.value, 1);
+        input.classList.remove('autofilled');
+      });
+
+      // Tocar el campo abre el calendario nativo (donde showPicker existe).
+      input.addEventListener('click', () => {
+        try {
+          if (typeof input.showPicker === 'function') input.showPicker();
+        } catch (err) { /* el navegador ya lo abrió o no lo permite */ }
+      });
+    }
+
+    function initPhotoField() {
+      const input = $('foto');
+      $('btn-foto').addEventListener('click', () => {
+        if (!state.busy) input.click();
+      });
+      input.addEventListener('change', onPhotoSelected);
+    }
+
+    /**
+     * `type="number"` descarta la coma decimal en silencio: tipear 1234,56
+     * termina guardando 123456. Interceptamos la coma y la insertamos como
+     * punto usando el motor de edición, que conserva el estado intermedio
+     * ("1234." + "5" = "1234.5").
+     */
+    function initMontoField() {
+      const input = $('monto');
+
+      input.addEventListener('beforeinput', (event) => {
+        const data = event.data;
+        if (!data || data.indexOf(',') === -1) return;
+        event.preventDefault();
+
+        if (data.length > 1) {
+          // Pegado de un monto completo, ej. "1.234,56".
+          const parsed = parseMonto(data);
+          if (isFinite(parsed) && parsed > 0) {
+            input.value = String(parsed);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+          }
+        }
+
+        const dotted = data.replace(/,/g, '.');
+        try {
+          if (!document.execCommand('insertText', false, dotted)) {
+            input.value = (input.value || '') + dotted;
+          }
+        } catch (err) {
+          input.value = (input.value || '') + dotted;
+        }
+      });
+    }
+
+    function initInstall() {
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        state.installPrompt = event;
+        $('btn-install').hidden = false;
+      });
+
+      $('btn-install').addEventListener('click', async () => {
+        if (!state.installPrompt) return;
+        state.installPrompt.prompt();
+        try { await state.installPrompt.userChoice; } catch (err) { /* ignorado */ }
+        state.installPrompt = null;
+        $('btn-install').hidden = true;
+      });
+
+      window.addEventListener('appinstalled', () => {
+        state.installPrompt = null;
+        $('btn-install').hidden = true;
+      });
+    }
+
+    function updateConnectivity() {
+      $('offline-badge').hidden = navigator.onLine !== false;
+    }
+
+    function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW la app igual funciona */ });
+      });
+    }
+
+    function exposeDebugHook() {
+      // Solo con ?debug=1: sirve para las pruebas automatizadas.
+      window.__OF__ = {
+        state: state,
+        config: APP_CONFIG,
+        helpers: {
+          toLocalIso: toLocalIso,
+          isoToLocalDate: isoToLocalDate,
+          shiftIsoDate: shiftIsoDate,
+          decodeJwtPayload: decodeJwtPayload,
+          isTrustedBackendUrl: isTrustedBackendUrl,
+          parseMonto: parseMonto,
+          configProblems: configProblems
+        },
+        applyExtraction: applyExtraction,
+        readForm: readForm,
+        validate: validate,
+        setSignedIn: setSignedIn,
+        setBusy: setBusy,
+        api: api,
+        handleCredential: handleCredential,
+        logout: logout
+      };
+    }
+
+    function init() {
+      $('version-label').textContent = 'v' + VERSION;
+
+      fillSelect($('categoria'), APP_CONFIG.CATEGORIAS);
+      fillSelect($('persona'), APP_CONFIG.PERSONAS);
+      initDateField();
+      initPhotoField();
+      initMontoField();
+      initInstall();
+      updateConnectivity();
+      showConfigWarning();
+
+      restoreSession();
+      initAuth();
+      registerServiceWorker();
+
+      $('btn-logout').addEventListener('click', logout);
+      $('expense-form').addEventListener('submit', onSubmit);
+
+      ['fecha', 'concepto', 'monto', 'categoria', 'persona'].forEach((id) => {
+        const element = $(id);
+        const clearMark = () => element.classList.remove('autofilled');
+        element.addEventListener('input', clearMark);
+        element.addEventListener('change', clearMark);
+      });
+
+      window.addEventListener('online', updateConnectivity);
+      window.addEventListener('offline', updateConnectivity);
+
+      // Si el celular suspendió la pestaña, el timer puede llegar tarde:
+      // al volver verificamos la expiración del token.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible' || !state.token) return;
+        if (state.exp - APP_CONFIG.EXPIRY_MARGIN_MS <= Date.now()) handleAuthFailure();
+      });
+
+      if (new URLSearchParams(location.search).has('debug')) exposeDebugHook();
+    }
+
+    init();
+  </script>
+</body>
+</html>

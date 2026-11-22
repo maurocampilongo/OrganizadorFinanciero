@@ -1,0 +1,8 @@
+{
+  "scriptId": "PEGAR_SCRIPT_ID_DE_APPS_SCRIPT",
+  "rootDir": ".",
+  "filePushOrder": [
+    "Code.js",
+    "appsscript.json"
+  ]
+}
