@@ -156,6 +156,15 @@ de Google.
 **Punto de control:** el ID termina en `.apps.googleusercontent.com` y empieza con
 números, un guion y letras. La app lo valida con ese formato exacto.
 
+**Cómo distinguir los IDs (es el error más común):**
+
+| ID | Se ve así | De dónde se saca | ¿Va en `APP_CONFIG`? |
+|----|-----------|------------------|----------------------|
+| **Client ID** ✅ | `123456789012-abc123.apps.googleusercontent.com` | Cloud Console → Credenciales → OAuth 2.0 Client IDs | **sí** |
+| ID de implementación ❌ | `AKfycb...` | está dentro de la URL `/exec` | no (ya está en la URL) |
+| ID del script ❌ | `1AbCdEf...` | Apps Script → Configuración del proyecto | no |
+| Client secret ❌ | `GOCSPX-...` | Cloud Console → tu cliente OAuth | nunca |
+
 > **No uses el “client secret”.** No lo necesitamos en ningún lado. Si lo generaste,
 > ignoralo (no es un secreto para esta arquitectura, pero tampoco hace falta).
 
@@ -355,8 +364,27 @@ content-type: application/json; charset=utf-8
 | Si en vez de eso ves… | Significa |
 |-----------------------|-----------|
 | HTML con la pantalla de login de Google | “Quién tiene acceso” no está en *Cualquier persona* |
+| **302 hacia `accounts.google.com/ServiceLogin`** | idem: el acceso sigue restringido (mirá el diagnóstico rápido) |
 | `{"ok":false,"error":"CONFIG"...}` | faltan Propiedades o la planilla no abre: corré `selfTest()` |
 | Error 404 | la URL está mal copiada o la implementación se borró |
+
+**Diagnóstico rápido de la URL** (sin seguir redirecciones, te dice qué pasa):
+
+```bash
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' \
+  "https://script.google.com/macros/s/XXXX/exec"
+```
+
+| Resultado | Significa | Solución |
+|-----------|-----------|----------|
+| `302 ...accounts.google.com/ServiceLogin...` | el deploy existe pero **pide login** | *Administrar implementaciones → ✏️ → Quién tiene acceso: **Cualquier persona*** → Implementar |
+| `404` | el ID de implementación no existe / está mal copiado | copiá la URL desde el diálogo de la implementación |
+| `302 ...script.googleusercontent.com...` | correcto: está redirigiendo la ejecución | probá el `curl -L` completo |
+
+> **Cómo arreglar el acceso:** *Implementar → Administrar implementaciones* → en la
+> fila de la implementación activa, **✏️ (editar)** → **Quién tiene acceso:
+> Cualquier persona** y **Ejecutar como: Yo** → **Implementar** (crea la versión
+> nueva) → copiá de nuevo la **URL de la aplicación web**. La URL no cambia.
 
 > **Cuidado con `clasp deploy`:** crea una implementación **nueva**, con **URL nueva**.
 > Para conservar la URL actual usá:
@@ -505,6 +533,8 @@ la versión publicada anterior hasta que deployes.
 | `Demasiadas fotos seguidas. Esperá un minuto.` | rate limit (15/min) | esperá 60 s |
 | `No pudimos conectar con el servidor. Revisá tu conexión.` | URL mal, implementación privada/borrada o sin internet | probá el `curl` del paso 8 |
 | `Respuesta inesperada del servidor. Reintentá.` | llegó HTML (login de Google) en vez de JSON | *Quién tiene acceso* = **Cualquier persona** |
+| `curl` al `/exec` da **302 a accounts.google.com** | el deploy existe pero pide login | *Administrar implementaciones → ✏️ → Cualquier persona + Ejecutar como: Yo → Implementar* |
+| `curl` al `/exec` da **404** | ID de implementación inexistente o mal copiado | copiá la URL desde el diálogo de la implementación (no el ID a mano) |
 | `No pudimos guardar el gasto. Reintentá.` | error al escribir en la hoja | revisá el log de ejecución y los permisos de la planilla |
 | No aparece el botón de Google | origen no autorizado / Client ID mal | agregá el origen exacto, sin path |
 | `Error 403: access_denied` al autorizar | tu email no está en *Usuarios de prueba* | agregalo en la pantalla de consentimiento |
