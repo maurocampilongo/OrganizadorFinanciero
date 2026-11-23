@@ -83,6 +83,21 @@
     }
     .card + .card { margin-top: 14px; }
     .card-title { margin-bottom: 6px; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .section-title { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -0.01em; }
+    .section-sub { margin: 0 0 12px; color: var(--muted); font-size: 0.83rem; }
+    .chip {
+      flex: 0 0 auto; padding: 4px 9px; border-radius: 999px;
+      border: 1px solid var(--line); background: #1b2634; color: var(--muted);
+      font-size: 0.67rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+    }
+    .chip.is-read { background: rgba(47, 191, 113, 0.14); border-color: rgba(47, 191, 113, 0.5); color: #7ce0a8; }
+    .or-divider {
+      display: flex; align-items: center; gap: 10px; margin: 16px 2px;
+      color: var(--muted); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-soft); }
     .muted { color: var(--muted); }
     .small { font-size: 0.85rem; }
     .tiny { font-size: 0.74rem; }
@@ -208,68 +223,82 @@
         <p class="status" id="login-status" role="status" aria-live="polite"></p>
       </section>
 
-      <section class="card" id="app-card" hidden>
-        <div class="capture" id="dropzone">
-          <input type="file" id="foto" accept="image/*" capture="environment" hidden>
-          <button type="button" class="btn btn-secondary" id="btn-foto">
-            <span aria-hidden="true">📷</span> Foto del ticket
-          </button>
-          <button type="button" class="btn btn-secondary" id="btn-leer" hidden>
-            <span aria-hidden="true">📖</span> Leer ticket
-          </button>
-          <span class="hint" id="foto-status" role="status" aria-live="polite">Opcional: arrastrá la foto acá, pegala con Ctrl+V o tocá el botón para sacarla.</span>
-          <div class="thumb-wrap" id="thumb-wrap" hidden>
-            <img id="thumb" alt="Vista previa del comprobante" decoding="async">
-            <div class="thumb-actions">
-              <button type="button" class="ghost" id="btn-quitar-foto">Quitar foto</button>
+      <div id="app-card" hidden>
+        <section class="card" id="ticket-card">
+          <div class="section-head">
+            <h2 class="section-title">📷 Leer un ticket</h2>
+          </div>
+          <p class="section-sub">Sacá, subí o arrastrá la foto: completamos los 5 campos por vos.</p>
+          <div class="capture" id="dropzone">
+            <input type="file" id="foto" accept="image/*" capture="environment" hidden>
+            <button type="button" class="btn btn-secondary" id="btn-foto">
+              <span aria-hidden="true">📷</span> Foto del ticket
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-leer" hidden>
+              <span aria-hidden="true">📖</span> Leer ticket
+            </button>
+            <span class="hint" id="foto-status" role="status" aria-live="polite">Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.</span>
+            <div class="thumb-wrap" id="thumb-wrap" hidden>
+              <img id="thumb" alt="Vista previa del comprobante" decoding="async">
+              <div class="thumb-actions">
+                <button type="button" class="ghost" id="btn-quitar-foto">Quitar foto</button>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="banner banner-warn" id="review-banner" hidden></div>
+        <div class="or-divider"><span>o completá los campos a mano</span></div>
 
-        <form id="expense-form" novalidate autocomplete="off">
-          <div class="field">
-            <label for="fecha">Fecha</label>
-            <div class="date-row">
-              <button type="button" class="step" id="btn-prev-day" aria-label="Un día antes">◀</button>
-              <input type="date" id="fecha" name="fecha" required>
-              <button type="button" class="step" id="btn-next-day" aria-label="Un día después">▶</button>
+        <section class="card" id="form-card">
+          <div class="section-head">
+            <h2 class="section-title">Detalle del gasto</h2>
+            <span class="chip" id="form-mode">Carga manual</span>
+          </div>
+          <div class="banner banner-warn" id="review-banner" hidden></div>
+
+          <form id="expense-form" novalidate autocomplete="off">
+            <div class="field">
+              <label for="fecha">Fecha</label>
+              <div class="date-row">
+                <button type="button" class="step" id="btn-prev-day" aria-label="Un día antes">◀</button>
+                <input type="date" id="fecha" name="fecha" required>
+                <button type="button" class="step" id="btn-next-day" aria-label="Un día después">▶</button>
+              </div>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="concepto">Concepto</label>
-            <input type="text" id="concepto" name="concepto" maxlength="120" placeholder="Ej.: Coto, nafta, luz" autocomplete="off" autocapitalize="sentences" enterkeyhint="next" required>
-          </div>
-
-          <div class="field">
-            <label for="monto">Monto</label>
-            <div class="money">
-              <span class="money-prefix" aria-hidden="true">$</span>
-              <input type="number" id="monto" name="monto" inputmode="decimal" step="0.01" min="0.01" placeholder="0,00" required>
+            <div class="field">
+              <label for="concepto">Concepto</label>
+              <input type="text" id="concepto" name="concepto" maxlength="120" placeholder="Ej.: Coto, nafta, luz" autocomplete="off" autocapitalize="sentences" enterkeyhint="next" required>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="categoria">Categoría</label>
-            <select id="categoria" name="categoria" required></select>
-          </div>
+            <div class="field">
+              <label for="monto">Monto</label>
+              <div class="money">
+                <span class="money-prefix" aria-hidden="true">$</span>
+                <input type="number" id="monto" name="monto" inputmode="decimal" step="0.01" min="0.01" placeholder="0,00" required>
+              </div>
+            </div>
 
-          <div class="field">
-            <label for="persona">¿Quién hizo el gasto?</label>
-            <select id="persona" name="persona" required></select>
-          </div>
+            <div class="field">
+              <label for="categoria">Categoría</label>
+              <select id="categoria" name="categoria" required></select>
+            </div>
 
-          <button type="submit" class="btn btn-primary" id="btn-save">Guardar gasto</button>
-          <p class="status" id="form-status" role="status" aria-live="polite"></p>
-        </form>
-      </section>
+            <div class="field">
+              <label for="persona">¿Quién hizo el gasto?</label>
+              <select id="persona" name="persona" required></select>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="btn-save">Guardar gasto</button>
+            <p class="status" id="form-status" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+      </div>
     </main>
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.1.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.2.0</span></span>
     </footer>
   </div>
 
@@ -296,9 +325,9 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.1.0';
+    const VERSION = '1.2.0';
 
-    const PHOTO_HINT = 'Opcional: arrastrá la foto acá, pegala con Ctrl+V o tocá el botón para sacarla.';
+    const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
 
     const state = {
       token: null,
@@ -704,11 +733,19 @@
       $('btn-save').textContent = state.saving ? 'Guardando…' : 'Guardar gasto';
     }
 
+    /** Etiqueta que indica si los datos vienen del ticket o son carga manual. */
+    function setFormMode(fromTicket) {
+      const chip = $('form-mode');
+      chip.textContent = fromTicket ? 'Leído del ticket' : 'Carga manual';
+      chip.classList.toggle('is-read', Boolean(fromTicket));
+    }
+
     function clearPhoto() {
       state.image = null;
       state.readDone = false;
       hideThumbnail();
       syncPhotoButtons();
+      setFormMode(false);
     }
 
     /**
@@ -823,7 +860,8 @@
       banner.textContent = 'Revisá y corregí los datos extraídos antes de guardar.' + notes;
       banner.hidden = false;
 
-      try { $('app-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
+      setFormMode(true);
+      try { $('form-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
 
       // En el celular no abrimos el teclado solo: taparía los datos a revisar.
       const finePointer = !!(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
@@ -1109,6 +1147,7 @@
       initPhotoField();
       setFotoStatus(PHOTO_HINT);
       syncPhotoButtons();
+      setFormMode(false);
       initMontoField();
       initInstall();
       updateConnectivity();
