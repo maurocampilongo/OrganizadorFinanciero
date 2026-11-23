@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const CACHE_NAME = 'gastos-shell-v11';
+const CACHE_NAME = 'gastos-shell-v12';
 const SHARE_CACHE = 'gastos-share-v1';
 const SHARE_KEY = new URL('__shared-image', self.registration.scope).href;
 
