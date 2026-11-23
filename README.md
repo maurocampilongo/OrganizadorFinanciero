@@ -281,6 +281,10 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
    los últimos, la app avisa **“Parece que ya cargaste este gasto”** y te deja
    **Guardar igual** o **Cancelar**.
 
+Arriba de todo tenés el **resumen del mes** (compacto). Tocá **Detalle** para ver el
+total por persona, los compartidos, el top de categorías y los **últimos gastos**, con
+un tacho para borrar cualquiera de ellos. Se actualiza solo al guardar o borrar.
+
 Si preferís cargar a mano, usá la tarjeta **Detalle del gasto** (la etiqueta dice
 **“Carga manual”**): los mismos campos (más el interruptor), sin foto.
 

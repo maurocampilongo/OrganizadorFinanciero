@@ -36,7 +36,7 @@
 
 'use strict';
 
-var VERSION = '1.6.0';
+var VERSION = '1.7.0';
 
 /**
  * Valores de referencia.
@@ -351,7 +351,7 @@ function doPost(e) {
 
     var action = typeof body.action === 'string' ? body.action.trim() : '';
     if (action === 'ping') return ok_({ version: VERSION });
-    if (action !== 'extract' && action !== 'save' && action !== 'delete') {
+    if (action !== 'extract' && action !== 'save' && action !== 'delete' && action !== 'summary') {
       return fail_('BAD_REQUEST', 'Acción desconocida.');
     }
 
@@ -380,6 +380,7 @@ function doPost(e) {
       return fail_('LIMIT', 'Demasiados guardados seguidos. Esperá un minuto.');
     }
     if (action === 'delete') return handleDelete_(body);
+    if (action === 'summary') return handleSummary_();
     return handleSave_(body);
 
   } catch (err) {
@@ -1039,6 +1040,93 @@ function handleDelete_(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Resumen de solo lectura: hoy, mes en curso, por persona, compartidos,
+ * categorías y los últimos gastos. Se calcula acá para no bajar la hoja entera.
+ */
+function handleSummary_() {
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+
+  var result = {
+    hoy: { count: 0, total: 0 },
+    mes: { count: 0, total: 0 },
+    personas: CONFIG.PEOPLE.map(function (nombre) { return { nombre: nombre, total: 0 }; }),
+    compartido: { si: 0, no: 0 },
+    categorias: [],
+    ultimos: []
+  };
+
+  if (lastRow < 2) return ok_(result);
+
+  var MAX_ROWS = 5000;
+  var from = Math.max(2, lastRow - MAX_ROWS + 1);
+  var width = CONFIG.HEADERS.length;
+  var values = sheet.getRange(from, 1, lastRow - from + 1, width).getValues();
+
+  var hoy = todayIso_();
+  var mes = hoy.slice(0, 7);
+  var personaTotals = {};
+  var catTotals = {};
+  CONFIG.PEOPLE.forEach(function (p) { personaTotals[p] = 0; });
+  var recientes = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i] || [];
+    var fecha = row[0] instanceof Date
+      ? Utilities.formatDate(row[0], scriptTimeZone_(), 'yyyy-MM-dd')
+      : String(row[0] === null || row[0] === undefined ? '' : row[0]).trim();
+    var monto = Number(row[2]);
+    if (!isValidIsoDate_(fecha) || !isFinite(monto) || monto <= 0) continue;
+
+    if (fecha === hoy) {
+      result.hoy.count++;
+      result.hoy.total += monto;
+    }
+
+    var esDelMes = fecha.slice(0, 7) === mes;
+    if (esDelMes) {
+      result.mes.count++;
+      result.mes.total += monto;
+
+      var persona = matchFromList_(row[4], CONFIG.PEOPLE) || String(row[4] || '').trim();
+      if (persona) personaTotals[persona] = (personaTotals[persona] || 0) + monto;
+
+      var categoria = String(row[3] || '').trim() || 'Otros';
+      catTotals[categoria] = (catTotals[categoria] || 0) + monto;
+
+      if (parseBoolean_(row[6])) result.compartido.si += monto;
+      else result.compartido.no += monto;
+    }
+
+    recientes.push({
+      row: from + i,
+      fecha: fecha,
+      concepto: collapseSpaces_(row[1]),
+      monto: round2_(monto),
+      categoria: String(row[3] || '').trim(),
+      persona: String(row[4] || '').trim(),
+      compartido: parseBoolean_(row[6])
+    });
+  }
+
+  result.hoy.total = round2_(result.hoy.total);
+  result.mes.total = round2_(result.mes.total);
+  result.compartido.si = round2_(result.compartido.si);
+  result.compartido.no = round2_(result.compartido.no);
+  result.personas = CONFIG.PEOPLE.map(function (nombre) {
+    return { nombre: nombre, total: round2_(personaTotals[nombre] || 0) };
+  });
+  result.categorias = Object.keys(catTotals).map(function (nombre) {
+    return { nombre: nombre, total: round2_(catTotals[nombre]) };
+  }).sort(function (a, b) {
+    return b.total - a.total;
+  }).slice(0, 5);
+  result.ultimos = recientes.slice(-8).reverse();
+
+  return ok_(result);
 }
 
 function getSpreadsheet_() {
