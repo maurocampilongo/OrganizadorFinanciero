@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.3.0';
+var VERSION = '1.4.0';
 
 /**
  * Valores de referencia.
@@ -48,7 +48,7 @@ var CONFIG = {
   GEMINI_MODEL: 'gemini-3.8-flash',
   GEMINI_MODEL_FALLBACK: 'gemini-3.7-flash',
   // Cadena de modelos: si uno está saturado (503) o retirado (404), sigue con el próximo.
-  GEMINI_MODELS: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-flash-lite-latest'],
+  GEMINI_MODELS: ['gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.7-flash'],
   GEMINI_MAX_OUTPUT_TOKENS: 8192,
   GEMINI_MAX_ATTEMPTS: 2,
   GEMINI_RETRY_MS: 800,
@@ -659,17 +659,87 @@ function geminiPayload_(model, base64, mimeType) {
  * Devuelve { ok, status, text, model, detail }.
  */
 /** Cadena de modelos a probar, sin duplicados ni vacíos. */
-function geminiModelChain_() {
-  var chain = [];
-  (CONFIG.GEMINI_MODELS || []).forEach(function (model) {
-    if (model && chain.indexOf(model) === -1) chain.push(model);
-  });
-  [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
-    if (model && chain.indexOf(model) === -1) chain.push(model);
-  });
-  return chain;
+var GEMINI_STATS_KEY = 'GEMINI_MODEL_STATS';
+
+/** Estadísticas persistentes por modelo (éxitos, fallos y latencia). */
+function geminiStats_() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty(GEMINI_STATS_KEY);
+    var parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    return {};
+  }
 }
 
+/** Guarda el resultado de una llamada para ordenar la próxima vez. */
+function geminiRecord_(model, ok, elapsedMs) {
+  if (!model) return;
+  try {
+    var stats = geminiStats_();
+    var entry = stats[model] || {};
+    entry.attempts = (entry.attempts || 0) + 1;
+    if (ok) {
+      entry.ok = (entry.ok || 0) + 1;
+      entry.lastOk = Date.now();
+      entry.lastMs = Math.max(1, Math.round(Number(elapsedMs) || 0));
+      entry.failStreak = 0;
+    } else {
+      entry.fail = (entry.fail || 0) + 1;
+      entry.failStreak = (entry.failStreak || 0) + 1;
+      entry.lastFail = Date.now();
+    }
+    stats[model] = entry;
+    PropertiesService.getScriptProperties().setProperty(GEMINI_STATS_KEY, JSON.stringify(stats));
+  } catch (err) {
+    // Nunca romper la extracción por no poder guardar estadísticas.
+  }
+}
+
+/**
+ * Orden de la cadena:
+ *  1) modelos con un éxito reciente, del más rápido al más lento;
+ *  2) los nunca probados, en el orden configurado;
+ *  3) los que fallaron hace poco, al final.
+ */
+function geminiModelChain_() {
+  var configured = [];
+  (CONFIG.GEMINI_MODELS || []).forEach(function (model) {
+    if (model && configured.indexOf(model) === -1) configured.push(model);
+  });
+  [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
+    if (model && configured.indexOf(model) === -1) configured.push(model);
+  });
+
+  var stats = geminiStats_();
+  var now = Date.now();
+  var FRESH_OK = 6 * 3600 * 1000;
+  var RECENT_FAIL = 10 * 60 * 1000;
+
+  function score(model) {
+    var entry = stats[model] || {};
+    var freshOk = entry.lastOk && (now - entry.lastOk) < FRESH_OK;
+    var recentFail = entry.lastFail && (now - entry.lastFail) < RECENT_FAIL;
+    return {
+      rank: freshOk ? 0 : (recentFail ? 2 : 1),
+      ms: freshOk ? (entry.lastMs || 1e9) : 1e9,
+      index: configured.indexOf(model)
+    };
+  }
+
+  return configured.slice().sort(function (a, b) {
+    var sa = score(a);
+    var sb = score(b);
+    if (sa.rank !== sb.rank) return sa.rank - sb.rank;
+    if (sa.ms !== sb.ms) return sa.ms - sb.ms;
+    return sa.index - sb.index;
+  });
+}
+
+/**
+ * Llama a Gemini con reintento ante 5xx y caída a un modelo alternativo.
+ * Devuelve { ok, status, text, model, detail }.
+ */
 function geminiRequest_(base64, mimeType) {
   var apiKey = setting_('GEMINI_API_KEY');
   if (isPlaceholder_(apiKey)) {
@@ -686,6 +756,7 @@ function geminiRequest_(base64, mimeType) {
     var payload = geminiPayload_(model, base64, mimeType);
 
     for (var attempt = 1; attempt <= CONFIG.GEMINI_MAX_ATTEMPTS; attempt++) {
+      var startedAt = Date.now();
       var response;
       try {
         response = UrlFetchApp.fetch(url, {
@@ -696,20 +767,26 @@ function geminiRequest_(base64, mimeType) {
           muteHttpExceptions: true
         });
       } catch (err) {
+        geminiRecord_(model, false, Date.now() - startedAt);
         last = { ok: false, status: 0, model: model, detail: 'fetch: ' + (err && err.message), text: '' };
         break;
       }
 
       var status = response.getResponseCode();
       var text = response.getContentText() || '';
+      var elapsed = Date.now() - startedAt;
 
-      if (status === 200) return { ok: true, status: status, text: text, model: model };
+      if (status === 200) {
+        geminiRecord_(model, true, elapsed);
+        return { ok: true, status: status, text: text, model: model, elapsed: elapsed };
+      }
 
+      geminiRecord_(model, false, elapsed);
       last = { ok: false, status: status, model: model, text: text, detail: 'gemini ' + status };
-      // 429 / 400 / 401 / 403 no mejoran reintentando ni cambiando de modelo.
-      if (status === 429 || status === 400 || status === 401 || status === 403) return last;
-      // 404 (modelo retirado) o 502/503 (saturación): mejor probar el siguiente modelo ya.
-      if (status === 404 || status === 502 || status === 503) break;
+      // 401/403 (key) y 429 (cuota) no mejoran cambiando de modelo.
+      if (status === 401 || status === 403 || status === 429) return last;
+      // 400 (payload incompatible), 404 (retirado) o 502/503 (saturación): siguiente modelo.
+      if (status === 400 || status === 404 || status === 502 || status === 503) break;
       // 500/504: un reintento del mismo modelo antes de pasar al siguiente.
       if (attempt < CONFIG.GEMINI_MAX_ATTEMPTS) Utilities.sleep(CONFIG.GEMINI_RETRY_MS * attempt);
     }
@@ -1067,6 +1144,8 @@ function probarGemini() {
   });
 
   lines.push('');
+  lines.push('orden que va a usar la app: ' + geminiModelChain_().join(' → '));
+  lines.push('');
   lines.push('Si un modelo dice "NO disponible": copiá uno de la lista en CONFIG.GEMINI_MODEL.');
   lines.push('Si aparece HTTP 401/403: revisá la key (o usá una AIza restringida a Generative Language API).');
   lines.push('Si aparece HTTP 429/5xx: cuota o sobrecarga; reintentá.');
@@ -1110,6 +1189,7 @@ function geminiPing_(model) {
     generationConfig: { temperature: 0, maxOutputTokens: CONFIG.GEMINI_MAX_OUTPUT_TOKENS }
   };
 
+  var startedAt = Date.now();
   try {
     var response = UrlFetchApp.fetch(url, {
       method: 'post',
@@ -1118,16 +1198,20 @@ function geminiPing_(model) {
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
+    var elapsed = Date.now() - startedAt;
 
     if (response.getResponseCode() !== 200) {
+      geminiRecord_(model, false, elapsed);
       return { ok: false, detail: 'HTTP ' + response.getResponseCode() + ' ' + redact_(response.getContentText()).slice(0, 200) };
     }
     var data = JSON.parse(response.getContentText());
     var candidate = data && data.candidates && data.candidates[0];
     var parts = (candidate && candidate.content && candidate.content.parts) || [];
     var text = parts.map(function (part) { return part && part.text ? part.text : ''; }).join('').trim();
+    geminiRecord_(model, !!text, elapsed);
     return { ok: !!text, detail: text ? '' : 'respuesta vacía; finishReason=' + (candidate && candidate.finishReason) };
   } catch (err) {
+    geminiRecord_(model, false, Date.now() - startedAt);
     return { ok: false, detail: redact_(err.message || err) };
   }
 }

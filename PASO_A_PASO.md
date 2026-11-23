@@ -188,10 +188,12 @@ las `AIza…` (~39) anteriores siguen funcionando. `selfTest()` acepta ambos for
 > credenciales → Clave de API y **restringila a *Generative Language API*** (las claves
 > estándar sin restricción se rechazan desde mayo 2026). Pegala en `GEMINI_API_KEY`.
 
-> Los modelos se prueban en cadena (`CONFIG.GEMINI_MODELS`): `gemini-3.8-flash` →
-> `gemini-3.7-flash` → `gemini-flash-lite-latest`. Si uno está saturado (503) o retirado
-> (404), el backend pasa al siguiente automáticamente. `probarGemini` muestra los
-> milisegundos de cada uno: si el lite es mucho más rápido, ponelo primero.
+> Los modelos se prueban en cadena (`CONFIG.GEMINI_MODELS`): `gemini-flash-lite-latest` →
+> `gemini-3.8-flash` → `gemini-3.7-flash`. Si uno está saturado (503), retirado (404) o
+> tarda demasiado, el backend pasa al siguiente. Además **aprende**: guarda en la Propiedad
+> `GEMINI_MODEL_STATS` la latencia y los fallos de cada modelo, y en la próxima extracción
+> arranca por el que respondió más rápido (los que fallaron van al final por 10 minutos).
+> `probarGemini` muestra los milisegundos y el orden que va a usar la app.
 
 ---
 
@@ -307,7 +309,7 @@ configurado`).
    ```
 4. Elegí **`selfTest`** → **Ejecutar**. Esperado:
    ```
-   == Organizador Financiero — selfTest 1.3.0 ==
+   == Organizador Financiero — selfTest 1.4.0 ==
    Zona horaria del script: America/Argentina/Buenos_Aires | Hoy: 2026-11-22
 
    AUTHORIZED_EMAIL: properties -> m***o@gmail.com
@@ -367,7 +369,7 @@ Si hay problemas, el detalle te dice qué propiedad falta o qué no puede abrir.
 HTTP/2 200
 content-type: application/json; charset=utf-8
 
-{"ok":true,"version":"1.3.0"}
+{"ok":true,"version":"1.4.0"}
 ```
 
 | Si en vez de eso ves… | Significa |
@@ -502,7 +504,7 @@ izquierda), el monto con dos decimales y la columna `Registrado` con fecha y hor
 
 ## 14. Verificación final (5 minutos)
 
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.3.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.4.0"}`.
 - [ ] `selfTest()` devuelve `PROBLEMAS (0)` y `RESULTADO: listo para usar.`
 - [ ] `probarGemini` muestra `gemini-3.8-flash: OK` (y el respaldo también).
 - [ ] Login desde la URL de Pages con tu cuenta.

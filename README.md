@@ -186,7 +186,7 @@ y `selfTest()` te dice exactamente cuál falta. Las Propiedades del script
    curl -sS -X POST "https://script.google.com/macros/s/XXXX/exec" \
      -H 'Content-Type: text/plain' \
      --data '{"action":"ping"}'
-   # -> {"ok":true,"version":"1.3.0"}
+   # -> {"ok":true,"version":"1.4.0"}
    ```
 
 > Cada cambio de código necesita una **nueva versión**. `clasp deploy` sin más crea
@@ -296,7 +296,7 @@ Detalles del formulario:
 | Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | idem |
 | Nombre de la hoja | `CONFIG.SHEET_NAME` | por defecto `Gastos` |
 | Columnas | `CONFIG.HEADERS` | si las cambiás en una hoja existente, `setup()` reescribe la fila 1 |
-| Modelo de IA | `CONFIG.GEMINI_MODELS` | cadena `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-flash-lite-latest`; si uno está saturado (503) o retirado (404) pasa al siguiente |
+| Modelos de IA | `CONFIG.GEMINI_MODELS` | cadena `gemini-flash-lite-latest` → `gemini-3.8-flash` → `gemini-3.7-flash`; el backend **aprende** cuál responde mejor y lo pone primero (ranking en la Propiedad `GEMINI_MODEL_STATS`) |
 | Compresión de foto | `APP_CONFIG.MAX_IMAGE_WIDTH` y `JPEG_QUALITY` | 1024 px y 0.75 |
 | Límites del backend | `CONFIG.MAX_MONTO`, `MAX_BODY_CHARS`, `MAX_IMAGE_BASE64_CHARS` | si los subís, revisá el tamaño de la imagen comprimida |
 
@@ -349,7 +349,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 
 - [ ] `APP_CONFIG.CLIENT_ID` y `BACKEND_URL` completos (sin `PEGAR_`).
 - [ ] Script Properties cargadas y `selfTest()` con `PROBLEMAS (0)`.
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.3.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.4.0"}`.
 - [ ] Implementación: *Ejecutar como* vos y *Acceso* **Cualquier persona**.
 - [ ] Origen `https://TU_USUARIO.github.io` autorizado en Cloud Console.
 - [ ] `git status` no muestra `.clasp.json` ni `.clasprc.json`.
