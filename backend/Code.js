@@ -36,7 +36,7 @@
 
 'use strict';
 
-var VERSION = '1.9.0';
+var VERSION = '1.9.1';
 
 /**
  * Valores de referencia.

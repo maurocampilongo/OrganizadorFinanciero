@@ -218,7 +218,7 @@ esto es lo único que se hace desde la web:
    curl -sS -L "https://script.google.com/macros/s/TU_ID/exec" \
      -H 'Content-Type: text/plain' --data '{"action":"ping"}'
    ```
-   Tiene que devolver la versión nueva (`{"ok":true,"version":"1.9.0"}` o la que corresponda).
+   Tiene que devolver la versión que acabas de publicar (por ejemplo `{"ok":true,"version":"1.9.1"}`).
 
 Listo: de acá en adelante, cualquier cambio en `backend/` que se pushee a `main` se deploya solo.
 
