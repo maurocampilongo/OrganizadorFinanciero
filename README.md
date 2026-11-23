@@ -13,6 +13,8 @@ La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en u
 > puntos de control, valores exactos y qué hacer ante cada error. Este README es
 > la referencia técnica y el resumen.
 
+**PWA publicada:** https://maurocampilongo.github.io/OrganizadorFinanciero/
+
 ```
 ┌─────────────────────────┐        POST (JSON, text/plain)      ┌──────────────────────────┐
 │  Celular / PWA          │ ──────────────────────────────────► │  Apps Script Web App     │
