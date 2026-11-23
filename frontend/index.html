@@ -172,6 +172,15 @@
     .toggle-input:checked + .toggle-ui::after { transform: translateX(20px); background: #7ce0a8; }
     .toggle-input:focus-visible + .toggle-ui { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+    .banner-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .banner-actions .btn { flex: 1 1 auto; min-height: 44px; font-size: 0.9rem; }
+    .undo {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid rgba(47, 191, 113, 0.45); background: rgba(47, 191, 113, 0.12);
+      color: #7ce0a8; font-size: 0.88rem;
+    }
+
     .date-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 8px; align-items: stretch; }
     .step {
       min-height: 50px; border-radius: 12px; border: 1px solid var(--line);
@@ -324,8 +333,20 @@
               </label>
             </div>
 
+            <div class="banner banner-warn" id="duplicate-banner" hidden>
+              <p id="duplicate-text"></p>
+              <div class="banner-actions">
+                <button type="button" class="btn btn-secondary" id="btn-force-save">Guardar igual</button>
+                <button type="button" class="ghost" id="btn-cancel-duplicate">Cancelar</button>
+              </div>
+            </div>
+
             <button type="submit" class="btn btn-primary" id="btn-save">Guardar gasto</button>
             <p class="status" id="form-status" role="status" aria-live="polite"></p>
+            <div class="undo" id="undo-box" hidden>
+              <span id="undo-text"></span>
+              <button type="button" class="ghost" id="btn-undo">Deshacer</button>
+            </div>
           </form>
         </section>
       </div>
@@ -333,7 +354,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.5.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.6.0</span></span>
     </footer>
   </div>
 
@@ -360,7 +381,7 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.5.0';
+    const VERSION = '1.6.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
 
@@ -374,7 +395,11 @@
       installPrompt: null,
       thumbUrl: '',
       image: null,
-      readDone: false
+      readDone: false,
+      pendingData: null,
+      undo: null,
+      undoTimer: null,
+      actionDone: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -525,6 +550,7 @@
       $('app-card').hidden = !signedIn;
       $('userbox').hidden = !signedIn;
       $('user-email').textContent = signedIn ? (state.email || 'Sesión iniciada') : '';
+      if (signedIn) setTimeout(applyPendingAction, 250);
     }
 
     function scheduleExpiry() {
@@ -674,7 +700,9 @@
 
       if (data && data.ok === false) {
         if (data.error === 'AUTH') handleAuthFailure();
-        throw new ApiError(String(data.error || 'SERVER'), String(data.message || 'No pudimos completar la operación.'));
+        const error = new ApiError(String(data.error || 'SERVER'), String(data.message || 'No pudimos completar la operación.'));
+        if (data.row) error.row = Number(data.row);
+        throw error;
       }
       if (!response.ok || !data || data.ok !== true) {
         throw new ApiError('SERVER', 'Respuesta inesperada del servidor. Reintentá.');
@@ -822,6 +850,7 @@
         }, APP_CONFIG.EXTRACT_TIMEOUT_MS);
         applyExtraction(result.data, result.warnings);
         state.readDone = true;
+        buzz(15);
         setFotoStatus('Datos extraídos. Revisalos antes de guardar.', 'ok');
       } catch (err) {
         state.readDone = false;
@@ -948,15 +977,69 @@
       if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) $('concepto').focus();
     }
 
-    async function onSubmit(event) {
-      event.preventDefault();
+    function buzz(pattern) {
+      try {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+      } catch (err) { /* sin vibración */ }
+    }
+
+    function showDuplicate(message) {
+      const banner = $('duplicate-banner');
+      $('duplicate-text').textContent = message || 'Parece que ya cargaste este gasto.';
+      banner.hidden = false;
+      try { banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (err) { /* ignorado */ }
+    }
+
+    function hideDuplicate() {
+      $('duplicate-banner').hidden = true;
+      $('duplicate-text').textContent = '';
+    }
+
+    function showUndo(row, data) {
+      if (!row) return;
+      $('undo-text').textContent = 'Guardado en la fila ' + row + '.';
+      $('undo-box').hidden = false;
+      state.undo = { row: Number(row), data: data };
+      if (state.undoTimer) clearTimeout(state.undoTimer);
+      state.undoTimer = setTimeout(hideUndo, 10000);
+    }
+
+    function hideUndo() {
+      $('undo-box').hidden = true;
+      if (state.undoTimer) { clearTimeout(state.undoTimer); state.undoTimer = null; }
+      state.undo = null;
+    }
+
+    async function undoLast() {
+      if (!state.undo || !state.undo.row || state.busy) return;
+      const row = state.undo.row;
+      const data = state.undo.data;
+      setBusy(true);
+      try {
+        await api('delete', {
+          row: row,
+          fecha: data.fecha,
+          concepto: data.concepto,
+          monto: data.monto
+        }, APP_CONFIG.FETCH_TIMEOUT_MS);
+        hideUndo();
+        buzz(20);
+        setFormStatus('Gasto eliminado.', 'ok');
+      } catch (err) {
+        setFormStatus(err && err.message ? err.message : 'No pudimos borrar el gasto.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function saveExpense(force) {
       if (state.busy) return;
       if (!state.token) {
         setFormStatus('Iniciá sesión para guardar.', 'error');
         return;
       }
 
-      const data = readForm();
+      const data = (force && state.pendingData) ? state.pendingData : readForm();
       const problem = validate(data);
       if (problem) {
         setFormStatus(problem, 'error');
@@ -970,16 +1053,46 @@
       state.saving = true;
       setBusy(true);
       setFormStatus('Guardando…');
+      hideDuplicate();
       try {
-        const result = await api('save', data, APP_CONFIG.FETCH_TIMEOUT_MS);
+        const payload = force ? Object.assign({}, data, { force: true }) : data;
+        const result = await api('save', payload, APP_CONFIG.FETCH_TIMEOUT_MS);
+        state.pendingData = null;
+        buzz(35);
         setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
+        showUndo(result.row, data);
         state.saving = false;
         resetAfterSave();
       } catch (err) {
-        setFormStatus(err && err.message ? err.message : 'No pudimos guardar el gasto.', 'error');
+        if (err && err.code === 'DUPLICATE') {
+          state.pendingData = data;
+          showDuplicate(err.message);
+          setFormStatus('');
+        } else {
+          setFormStatus(err && err.message ? err.message : 'No pudimos guardar el gasto.', 'error');
+        }
       } finally {
         state.saving = false;
         setBusy(false);
+      }
+    }
+
+    function onSubmit(event) {
+      event.preventDefault();
+      saveExpense(false);
+    }
+
+    function applyPendingAction() {
+      if (state.actionDone) return;
+      const action = new URLSearchParams(location.search).get('action');
+      if (!action) return;
+      state.actionDone = true;
+      if (action === 'manual') {
+        try { $('form-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
+        $('concepto').focus();
+      } else if (action === 'photo') {
+        try { $('ticket-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
+        $('btn-foto').focus();
       }
     }
 
@@ -1195,6 +1308,9 @@
 
       $('btn-logout').addEventListener('click', logout);
       $('expense-form').addEventListener('submit', onSubmit);
+      $('btn-force-save').addEventListener('click', () => saveExpense(true));
+      $('btn-cancel-duplicate').addEventListener('click', () => { hideDuplicate(); state.pendingData = null; });
+      $('btn-undo').addEventListener('click', undoLast);
 
       ['fecha', 'concepto', 'monto', 'categoria', 'persona'].forEach((id) => {
         const element = $(id);

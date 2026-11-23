@@ -12,8 +12,12 @@
  *   { "action": "extract", "idToken", "image", "mimeType" }
  *     -> { ok: true, data: { fecha, concepto, monto, categoria, persona }, warnings: [] }
  *
- *   { "action": "save", "idToken", "fecha", "concepto", "monto", "categoria", "persona" }
+ *   { "action": "save", "idToken", "fecha", "concepto", "monto", "categoria", "persona", "compartido" }
  *     -> { ok: true, row, fecha, monto }
+ *     -> { ok: false, error: "DUPLICATE", row }   si repite un gasto reciente (con "force": true se guarda igual)
+ *
+ *   { "action": "delete", "idToken", "row", "fecha", "concepto", "monto" }
+ *     -> { ok: true, deleted: true }              borra solo si la fila coincide (Deshacer)
  *
  * Seguridad
  *  - La Web App se publica como ANYONE_ANONYMOUS (es la única forma de que un
@@ -32,7 +36,7 @@
 
 'use strict';
 
-var VERSION = '1.5.0';
+var VERSION = '1.6.0';
 
 /**
  * Valores de referencia.
@@ -347,7 +351,7 @@ function doPost(e) {
 
     var action = typeof body.action === 'string' ? body.action.trim() : '';
     if (action === 'ping') return ok_({ version: VERSION });
-    if (action !== 'extract' && action !== 'save') {
+    if (action !== 'extract' && action !== 'save' && action !== 'delete') {
       return fail_('BAD_REQUEST', 'Acción desconocida.');
     }
 
@@ -375,6 +379,7 @@ function doPost(e) {
     if (rateLimited_('save:' + auth.email, 30, 60)) {
       return fail_('LIMIT', 'Demasiados guardados seguidos. Esperá un minuto.');
     }
+    if (action === 'delete') return handleDelete_(body);
     return handleSave_(body);
 
   } catch (err) {
@@ -920,6 +925,26 @@ function handleSave_(body) {
 
   try {
     var sheet = getSheet_();
+
+    if (!parseBoolean_(body.force)) {
+      var duplicateRow = findDuplicateRow_(sheet, {
+        fecha: fecha,
+        concepto: concepto,
+        monto: monto,
+        categoria: categoria,
+        persona: persona,
+        compartido: compartido
+      });
+      if (duplicateRow) {
+        return json_({
+          ok: false,
+          error: 'DUPLICATE',
+          message: 'Parece que ya cargaste este gasto (fila ' + duplicateRow + '). Si querés, guardalo igual.',
+          row: duplicateRow
+        });
+      }
+    }
+
     var row = sheet.getLastRow() + 1;
     var range = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length);
 
@@ -945,6 +970,72 @@ function handleSave_(body) {
     return ok_({ row: row, fecha: fecha, monto: monto });
   } catch (err) {
     return fail_('INTERNAL', 'No pudimos guardar el gasto. Reintentá.', 'save: ' + (err && err.stack ? err.stack : err));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Devuelve la fila de un gasto idéntico entre las últimas 5 (0 si no hay). */
+function findDuplicateRow_(sheet, candidate) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  var from = Math.max(2, lastRow - 4);
+  var width = CONFIG.HEADERS.length;
+  var values = sheet.getRange(from, 1, lastRow - from + 1, width).getValues();
+  var concepto = String(candidate.concepto || '').toLowerCase();
+
+  for (var i = values.length - 1; i >= 0; i--) {
+    var row = values[i] || [];
+    var sameFecha = String(row[0]) === candidate.fecha;
+    var sameConcepto = String(row[1] || '').trim().toLowerCase() === concepto;
+    var sameMonto = Math.abs(Number(row[2]) - Number(candidate.monto)) < 0.005;
+    var sameCategoria = String(row[3]) === candidate.categoria;
+    var samePersona = String(row[4]) === candidate.persona;
+    var sameCompartido = parseBoolean_(row[6]) === candidate.compartido;
+
+    if (sameFecha && sameConcepto && sameMonto && sameCategoria && samePersona && sameCompartido) {
+      return from + i;
+    }
+  }
+  return 0;
+}
+
+/** Borra una fila solo si los datos coinciden (para el "Deshacer"). */
+function handleDelete_(body) {
+  var row = Number(body.row);
+  if (!(row >= 2 && row <= 1000000)) return fail_('BAD_REQUEST', 'La fila no es válida.');
+
+  var fecha = typeof body.fecha === 'string' ? body.fecha.trim() : '';
+  var concepto = collapseSpaces_(body.concepto);
+  var monto = parseAmount_(body.monto);
+  if (!isValidIsoDate_(fecha) || !concepto || !isFinite(monto)) {
+    return fail_('BAD_REQUEST', 'Faltan los datos para verificar la fila.');
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(CONFIG.LOCK_TIMEOUT_MS)) {
+    return fail_('BUSY', 'El servidor está ocupado. Reintentá en unos segundos.');
+  }
+
+  try {
+    var sheet = getSheet_();
+    if (row > sheet.getLastRow()) return fail_('BAD_REQUEST', 'Esa fila ya no existe.');
+
+    var values = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length).getValues()[0];
+    var sameFecha = String(values[0]) === fecha;
+    var sameConcepto = collapseSpaces_(values[1]).toLowerCase() === concepto.toLowerCase();
+    var sameMonto = Math.abs(Number(values[2]) - monto) < 0.005;
+
+    if (!sameFecha || !sameConcepto || !sameMonto) {
+      return fail_('CONFLICT', 'La fila cambió; no la borramos.', 'row ' + row + ' no coincide');
+    }
+
+    sheet.deleteRow(row);
+    SpreadsheetApp.flush();
+    return ok_({ deleted: true, row: row });
+  } catch (err) {
+    return fail_('INTERNAL', 'No pudimos borrar el gasto.', 'delete: ' + (err && err.stack ? err.stack : err));
   } finally {
     lock.releaseLock();
   }

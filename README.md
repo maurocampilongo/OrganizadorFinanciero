@@ -272,10 +272,17 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 3. Revisá el aviso amarillo **“Revisá y corregí los datos extraídos antes de guardar”**.
    Los campos autocompletados quedan con borde verde hasta que los toques, y la etiqueta
    del formulario dice **“Leído del ticket”**.
-4. **Guardar gasto** → aparece `Guardado ✔ (fila N)`.
+4. **Guardar gasto** → aparece `Guardado ✔ (fila N)`. Durante 10 segundos podés tocar
+   **Deshacer** para borrar esa fila si te equivocaste.
+5. Si repetís un gasto idéntico (fecha, concepto, monto, categoría, persona y tilde) entre
+   los últimos, la app avisa **“Parece que ya cargaste este gasto”** y te deja
+   **Guardar igual** o **Cancelar**.
 
 Si preferís cargar a mano, usá la tarjeta **Detalle del gasto** (la etiqueta dice
 **“Carga manual”**): los mismos campos (más el interruptor), sin foto.
+
+Con la PWA instalada, **mantené presionado el ícono** y aparecen los atajos
+**Foto del ticket** y **Cargar a mano** (Android). La app vibra al guardar y al leer.
 
 Detalles del formulario:
 
