@@ -1,0 +1,66 @@
+# Deploy automático del backend a Google Apps Script.
+#
+# Copiar UNA sola vez a .github/workflows/deploy-backend.yml
+# (GitHub → Add file → Create new file), porque el token automático de este repo
+# no puede crear archivos en .github/workflows/.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   CLASPRC_JSON               contenido completo de ~/.clasprc.json tras `clasp login`
+#   APPS_SCRIPT_ID             ID del proyecto (Apps Script → Configuración del proyecto)
+#   APPS_SCRIPT_DEPLOYMENT_ID  ID de la implementación (el AKfycb… de la URL /exec)
+#
+# Requisitos:
+#   - Habilitar la Apps Script API: https://script.google.com/home/usersettings
+#   - `clasp login` con la MISMA cuenta dueña del script.
+#   - La implementación ya debe existir: este workflow la actualiza (misma URL).
+
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar clasp
+        run: npm install -g @google/clasp@3
+
+      - name: Credenciales de Google
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+      - name: Configurar el proyecto
+        working-directory: backend
+        env:
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          printf '{"scriptId":"%s","rootDir":".","filePushOrder":["Code.js","appsscript.json"]}\n' "$APPS_SCRIPT_ID" > .clasp.json
+
+      - name: Subir el código
+        working-directory: backend
+        run: clasp push -f
+
+      - name: Publicar versión nueva (misma URL)
+        working-directory: backend
+        env:
+          APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+        run: clasp deploy --deploymentId "$APPS_SCRIPT_DEPLOYMENT_ID" --description "CI $GITHUB_SHA"
