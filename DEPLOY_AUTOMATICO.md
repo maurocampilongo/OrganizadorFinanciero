@@ -220,6 +220,13 @@ esto es lo único que se hace desde la web:
    ```
    Tiene que devolver la versión que acabas de publicar (por ejemplo `{"ok":true,"version":"1.9.1"}`).
 
+> Si devuelve una versión vieja, puede ser **caché** de la URL `/exec`. Probá con un parámetro
+> anti-caché:
+> ```bash
+> curl -sS -L "https://script.google.com/macros/s/TU_ID/exec?cb=$(date +%s)" \
+>   -H "Content-Type: text/plain" --data '{"action":"ping"}'
+> ```
+
 Listo: de acá en adelante, cualquier cambio en `backend/` que se pushee a `main` se deploya solo.
 
 ---
