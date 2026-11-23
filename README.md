@@ -74,7 +74,7 @@ La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en u
 2. Copiá el ID de la URL: `https://docs.google.com/spreadsheets/d/`**`ESTE_ES_EL_ID`**`/edit`.
 
 No hace falta crear la hoja ni los encabezados a mano: `setup()` crea la hoja `Gastos`
-con las 6 columnas (`Fecha`, `Concepto`, `Monto`, `Categoría`, `Quién`, `Registrado`)
+con las 7 columnas (`Fecha`, `Concepto`, `Monto`, `Categoría`, `Quién`, `Registrado`, `Compartido`)
 y los formatos correctos.
 
 ## Paso 2 — Client ID de OAuth (Google Cloud Console)
@@ -211,7 +211,7 @@ const APP_CONFIG = {
   CLIENT_ID: '123456789012-xxxx.apps.googleusercontent.com',   // paso 2
   BACKEND_URL: 'https://script.google.com/macros/s/XXXX/exec',   // paso 6
   CATEGORIAS: ['Supermercado', 'Servicios', 'Transporte', 'Salidas', 'Salud', 'Hogar', 'Otros'],
-  PERSONAS: ['Mauro', 'Compartido'],
+  PERSONAS: ['Mauro', 'Anto'],
   ...
 };
 ```
@@ -275,7 +275,7 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 4. **Guardar gasto** → aparece `Guardado ✔ (fila N)`.
 
 Si preferís cargar a mano, usá la tarjeta **Detalle del gasto** (la etiqueta dice
-**“Carga manual”**): los mismos 5 campos, sin foto.
+**“Carga manual”**): los mismos campos (más el interruptor), sin foto.
 
 Detalles del formulario:
 
@@ -284,16 +284,19 @@ Detalles del formulario:
 - **Concepto**: texto libre, máximo 120 caracteres.
 - **Monto**: teclado decimal, `step="0.01"`; acepta `1.234,56` o `1234.56`
   (la coma se convierte a punto automáticamente, porque `type="number"` la descartaría).
-- **Categoría** y **Quién**: listas cerradas; el backend rechaza valores fuera de la lista.
-- Después de guardar se conservan **fecha, categoría y persona** (útil para cargar varios
-  tickets del mismo día) y se limpian concepto, monto y la foto.
+- **Categoría**: lista cerrada; el backend rechaza valores fuera de la lista.
+- **Quién hizo el gasto**: `Mauro` o `Anto` (son los dos únicos valores válidos).
+- **Gasto compartido**: interruptor que se guarda como casilla (checkbox) en la columna
+  `Compartido`, para después separar en la planilla propia o en la de compartidos.
+- Después de guardar se conservan **fecha, categoría, persona y el interruptor** (útil
+  para cargar varios tickets del mismo día) y se limpian concepto, monto y la foto.
 
 ## Personalización
 
 | Qué | Dónde | Nota |
 |-----|-------|------|
 | Categorías | `CONFIG.CATEGORIES` (backend) **y** `APP_CONFIG.CATEGORIAS` (frontend) | tienen que coincidir: el backend valida contra su lista |
-| Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | idem |
+| Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | `Mauro` y `Anto`; el backend valida contra su lista |
 | Nombre de la hoja | `CONFIG.SHEET_NAME` | por defecto `Gastos` |
 | Columnas | `CONFIG.HEADERS` | si las cambiás en una hoja existente, `setup()` reescribe la fila 1 |
 | Modelos de IA | `CONFIG.GEMINI_MODELS` | cadena `gemini-flash-lite-latest` → `gemini-3.8-flash` → `gemini-3.7-flash`; el backend **aprende** cuál responde mejor y lo pone primero (ranking en la Propiedad `GEMINI_MODEL_STATS`) |

@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.4.0';
+var VERSION = '1.5.0';
 
 /**
  * Valores de referencia.
@@ -53,10 +53,11 @@ var CONFIG = {
   GEMINI_MAX_ATTEMPTS: 2,
   GEMINI_RETRY_MS: 800,
   SHEET_NAME: 'Gastos',
-  HEADERS: ['Fecha', 'Concepto', 'Monto', 'Categoría', 'Quién', 'Registrado'],
+  // 'Compartido' va al final para no mover los datos existentes de la planilla.
+  HEADERS: ['Fecha', 'Concepto', 'Monto', 'Categoría', 'Quién', 'Registrado', 'Compartido'],
 
   CATEGORIES: ['Supermercado', 'Servicios', 'Transporte', 'Salidas', 'Salud', 'Hogar', 'Otros'],
-  PEOPLE: ['Mauro', 'Compartido'],
+  PEOPLE: ['Mauro', 'Anto'],
 
   MAX_BODY_CHARS: 8 * 1024 * 1024,
   MAX_IMAGE_BASE64_CHARS: 6 * 1024 * 1024,
@@ -287,9 +288,19 @@ function cleanConcepto_(value) {
 
 /** Formatos por columna de una fila de datos (la 3.ª es el monto). */
 function rowFormats_() {
-  return CONFIG.HEADERS.map(function (header, index) {
-    return index === 2 ? '#,##0.00' : '@';
+  return CONFIG.HEADERS.map(function (header) {
+    if (header === 'Monto') return '#,##0.00';
+    if (header === 'Compartido') return 'General';
+    return '@';
   });
+}
+
+/** true/false tolerante: acepta booleanos, 1/0, 'Sí'/'No', 'x'. */
+function parseBoolean_(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value === undefined || value === null) return false;
+  var text = String(value).trim().toLowerCase();
+  return ['true', 'si', 'sí', 's', '1', 'x', 'compartido'].indexOf(text) > -1;
 }
 
 /** Índice de columna a letra A1 (0 -> A, 25 -> Z, 26 -> AA). */
@@ -900,6 +911,8 @@ function handleSave_(body) {
   var persona = matchFromList_(body.persona, CONFIG.PEOPLE);
   if (!persona) return fail_('BAD_REQUEST', 'Elegí quién hizo el gasto.');
 
+  var compartido = parseBoolean_(body.compartido);
+
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(CONFIG.LOCK_TIMEOUT_MS)) {
     return fail_('BUSY', 'El servidor está ocupado. Reintentá en unos segundos.');
@@ -913,14 +926,20 @@ function handleSave_(body) {
     // Formato ANTES de escribir: la fecha y el registro quedan como texto y
     // Sheets no los reinterpreta como fecha/hora.
     range.setNumberFormats([rowFormats_()]);
-    range.setValues([[
-      sanitizeCell_(fecha),
-      concepto,
-      monto,
-      sanitizeCell_(categoria),
-      sanitizeCell_(persona),
-      sanitizeCell_(timestamp_())
-    ]]);
+    var registro = timestamp_();
+    var rowValues = CONFIG.HEADERS.map(function (header) {
+      switch (header) {
+        case 'Fecha': return sanitizeCell_(fecha);
+        case 'Concepto': return concepto;
+        case 'Monto': return monto;
+        case 'Categoría': return sanitizeCell_(categoria);
+        case 'Quién': return sanitizeCell_(persona);
+        case 'Registrado': return sanitizeCell_(registro);
+        case 'Compartido': return compartido;
+        default: return '';
+      }
+    });
+    range.setValues([rowValues]);
     SpreadsheetApp.flush();
 
     return ok_({ row: row, fecha: fecha, monto: monto });
@@ -1002,10 +1021,15 @@ function setup() {
 
   CONFIG.HEADERS.forEach(function (header, index) {
     var letter = columnLetter_(index);
-    sheet.getRange(letter + '2:' + letter).setNumberFormat(index === 2 ? '#,##0.00' : '@');
+    var range = sheet.getRange(letter + '2:' + letter);
+    if (header === 'Compartido') {
+      range.insertCheckboxes();
+    } else {
+      range.setNumberFormat(header === 'Monto' ? '#,##0.00' : '@');
+    }
   });
 
-  var widths = [110, 240, 120, 130, 130, 160];
+  var widths = [110, 240, 120, 130, 130, 160, 110];
   CONFIG.HEADERS.forEach(function (header, index) {
     if (widths[index]) sheet.setColumnWidth(index + 1, widths[index]);
   });
@@ -1335,7 +1359,8 @@ function auditSheet() {
       String(row[1] === null || row[1] === undefined ? '' : row[1]).trim(),
       String(monto),
       categoria,
-      persona
+      persona,
+      String(row[6] === null || row[6] === undefined ? '' : row[6])
     ].join('|');
     if (seen[key]) {
       duplicates++;

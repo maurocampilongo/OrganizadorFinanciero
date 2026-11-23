@@ -102,7 +102,7 @@ Vas a manejar exactamente **6 valores**. Esta tabla es la referencia para no per
 barras ni espacios.
 
 **No hace falta** crear la hoja “Gastos” ni los encabezados: `setup()` los crea
-(`Fecha`, `Concepto`, `Monto`, `Categoría`, `Quién`, `Registrado`).
+(`Fecha`, `Concepto`, `Monto`, `Categoría`, `Quién`, `Registrado`, `Compartido`).
 
 ---
 
@@ -305,7 +305,7 @@ configurado`).
    Planilla: Gastos personales (1AbC…7890)
    Hoja "Gastos": creada
    Encabezados: escritos ahora
-   Formatos: A = texto, C = #,##0.00, fila 1 congelada
+   Formatos: A = texto, C = #,##0.00, G = casilla (checkbox), fila 1 congelada
    ```
 4. Elegí **`selfTest`** → **Ejecutar**. Esperado:
    ```
@@ -421,7 +421,7 @@ curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' \
      CLIENT_ID: 'PEGAR_CLIENT_ID.apps.googleusercontent.com',
      BACKEND_URL: 'PEGAR_URL_EXEC_DE_APPS_SCRIPT',
      CATEGORIAS: ['Supermercado', 'Servicios', 'Transporte', 'Salidas', 'Salud', 'Hogar', 'Otros'],
-     PERSONAS: ['Mauro', 'Compartido'],
+     PERSONAS: ['Mauro', 'Anto'],
      ...
    };
    ```
