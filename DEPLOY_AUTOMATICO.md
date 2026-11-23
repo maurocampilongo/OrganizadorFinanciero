@@ -96,9 +96,22 @@ Es **una sola línea** JSON, empieza con `{"tokens"` y adentro tiene `refresh_to
 {"tokens":{"default":{"access_token":"ya29.a0Af...","refresh_token":"1//0g...","scope":"https://www.googleapis.com/auth/script.projects ...","token_type":"Bearer","expiry_date":1790000000000}}}
 ```
 
-- Copiá **desde la primera `{` hasta la última `}`**.
+- Copiá **desde la primera `{` hasta la última `}`**. Nada más: **no copies el prompt**
+  (`usuario@cloudshell:~$`) ni líneas de más.
 - No lo reformatees, no le agregues comillas, no lo “prettify” con un editor.
 - Si tiene más de un usuario (`default`, otro nombre), está bien: mandalo completo.
+
+**Copiarlo limpio en una sola línea (recomendado):**
+
+```bash
+python3 -c "import json; print(json.dumps(json.load(open('$HOME/.clasprc.json'))))"
+```
+
+Copiá lo que imprime (empieza con `{"tokens"`) y pegá **solo eso** en el secreto.
+Si tenés `jq`: `jq -c . ~/.clasprc.json` hace lo mismo.
+
+> El workflow tolera texto extra después del JSON (lo informa como *warning*), pero es mejor
+> copiarlo limpio: si el JSON está cortado o mal, el deploy falla.
 
 ### 1.3 Guardarlo en GitHub
 
@@ -193,6 +206,7 @@ Listo: de acá en adelante, cualquier cambio en `backend/` que se pushee a `main
 | Error en el log del Action | Causa | Solución |
 |---|---|---|
 | `Could not find credentials` / `Could not read credentials` | `CLASPRC_JSON` vacío, cortado o con comillas extra | Volver a copiar el archivo completo |
+| `Unexpected non-whitespace character after JSON` | el secreto tiene **texto extra** después del JSON (típico: el prompt de la shell) | volver a copiarlo con el comando de arriba, o actualizar el workflow (ya lo tolera) |
 | `invalid_grant` / `Token has been expired or revoked` | la sesión se revocó o venció | `clasp login` de nuevo y actualizar el secreto |
 | `The caller does not have permission` (403) | el login se hizo con otra cuenta | repetir el login con la cuenta dueña |
 | `User has not enabled the Apps Script API` | falta el toggle | activarlo en <https://script.google.com/home/usersettings> |

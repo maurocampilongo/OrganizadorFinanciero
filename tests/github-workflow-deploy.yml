@@ -5,7 +5,8 @@
 # no puede crear archivos en .github/workflows/.
 #
 # Secretos necesarios (Settings → Secrets and variables → Actions):
-#   CLASPRC_JSON               contenido completo de ~/.clasprc.json tras `clasp login`
+#   CLASPRC_JSON               contenido de ~/.clasprc.json tras `clasp login`
+#                              (el workflow tolera texto extra, p. ej. el prompt de la shell)
 #   APPS_SCRIPT_ID             ID del proyecto (Apps Script → Configuración del proyecto)
 #   APPS_SCRIPT_DEPLOYMENT_ID  ID de la implementación (el AKfycb… de la URL /exec)
 #
@@ -39,21 +40,50 @@ jobs:
           node-version: 22
 
       - name: Instalar clasp
-        run: npm install -g @google/clasp@3
+        run: |
+          npm install -g @google/clasp@3
+          clasp --version
 
       - name: Credenciales de Google
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          chmod 600 "$HOME/.clasprc.json"
+          python3 - <<'PY'
+          import json, os, sys
+          raw = os.environ.get('CLASPRC_JSON', '').strip()
+          if not raw:
+              print('::error::Falta el secreto CLASPRC_JSON')
+              sys.exit(1)
+          try:
+              data, end = json.JSONDecoder().raw_decode(raw)
+          except Exception as exc:
+              print('::error::CLASPRC_JSON no es JSON valido: ' + str(exc))
+              sys.exit(1)
+          leftover = raw[end:].strip()
+          if leftover:
+              print('::warning::Se ignoro texto extra despues del JSON: ' + leftover[:80])
+          if 'tokens' not in data:
+              print('::error::CLASPRC_JSON no tiene "tokens": revisa que copiaste el archivo correcto')
+              sys.exit(1)
+          path = os.path.expanduser('~/.clasprc.json')
+          with open(path, 'w', encoding='utf-8') as fh:
+              fh.write(json.dumps(data))
+          os.chmod(path, 0o600)
+          print('Credenciales OK')
+          PY
 
       - name: Configurar el proyecto
         working-directory: backend
         env:
           APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
-          printf '{"scriptId":"%s","rootDir":".","filePushOrder":["Code.js","appsscript.json"]}\n' "$APPS_SCRIPT_ID" > .clasp.json
+          SCRIPT_ID="$(printf '%s' "$APPS_SCRIPT_ID" | tr -d '[:space:]')"
+          if [ -z "$SCRIPT_ID" ]; then
+            echo "::error::Falta el secreto APPS_SCRIPT_ID"
+            exit 1
+          fi
+          printf '{"scriptId":"%s","rootDir":".","filePushOrder":["Code.js","appsscript.json"]}\n' "$SCRIPT_ID" > .clasp.json
+          echo "Proyecto configurado: $SCRIPT_ID"
 
       - name: Subir el código
         working-directory: backend
@@ -63,4 +93,10 @@ jobs:
         working-directory: backend
         env:
           APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
-        run: clasp deploy --deploymentId "$APPS_SCRIPT_DEPLOYMENT_ID" --description "CI $GITHUB_SHA"
+        run: |
+          DEPLOY_ID="$(printf '%s' "$APPS_SCRIPT_DEPLOYMENT_ID" | tr -d '[:space:]')"
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "::error::Falta el secreto APPS_SCRIPT_DEPLOYMENT_ID"
+            exit 1
+          fi
+          clasp deploy --deploymentId "$DEPLOY_ID" --description "CI $GITHUB_SHA"
