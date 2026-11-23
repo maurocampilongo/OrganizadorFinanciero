@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const CACHE_NAME = 'gastos-shell-v4';
+const CACHE_NAME = 'gastos-shell-v5';
 
 const SHELL = [
   './',

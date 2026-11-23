@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.2.0';
+var VERSION = '1.3.0';
 
 /**
  * Valores de referencia.
@@ -47,6 +47,8 @@ var CONFIG = {
 
   GEMINI_MODEL: 'gemini-3.8-flash',
   GEMINI_MODEL_FALLBACK: 'gemini-3.7-flash',
+  // Cadena de modelos: si uno está saturado (503) o retirado (404), sigue con el próximo.
+  GEMINI_MODELS: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-flash-lite-latest'],
   GEMINI_MAX_OUTPUT_TOKENS: 8192,
   GEMINI_MAX_ATTEMPTS: 2,
   GEMINI_RETRY_MS: 800,
@@ -656,16 +658,25 @@ function geminiPayload_(model, base64, mimeType) {
  * Llama a Gemini con reintento ante 5xx y caída a un modelo alternativo.
  * Devuelve { ok, status, text, model, detail }.
  */
+/** Cadena de modelos a probar, sin duplicados ni vacíos. */
+function geminiModelChain_() {
+  var chain = [];
+  (CONFIG.GEMINI_MODELS || []).forEach(function (model) {
+    if (model && chain.indexOf(model) === -1) chain.push(model);
+  });
+  [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
+    if (model && chain.indexOf(model) === -1) chain.push(model);
+  });
+  return chain;
+}
+
 function geminiRequest_(base64, mimeType) {
   var apiKey = setting_('GEMINI_API_KEY');
   if (isPlaceholder_(apiKey)) {
     return { ok: false, code: 'CONFIG', status: 0, model: CONFIG.GEMINI_MODEL, detail: 'GEMINI_API_KEY ausente', text: '' };
   }
 
-  var models = [CONFIG.GEMINI_MODEL];
-  if (CONFIG.GEMINI_MODEL_FALLBACK && CONFIG.GEMINI_MODEL_FALLBACK !== CONFIG.GEMINI_MODEL) {
-    models.push(CONFIG.GEMINI_MODEL_FALLBACK);
-  }
+  var models = geminiModelChain_();
 
   var last = { ok: false, status: 0, model: models[0], detail: 'sin intentos', text: '' };
 
@@ -697,8 +708,9 @@ function geminiRequest_(base64, mimeType) {
       last = { ok: false, status: status, model: model, text: text, detail: 'gemini ' + status };
       // 429 / 400 / 401 / 403 no mejoran reintentando ni cambiando de modelo.
       if (status === 429 || status === 400 || status === 401 || status === 403) return last;
-      // 404: el modelo no existe para esta key; probamos el alternativo.
-      if (status === 404) break;
+      // 404 (modelo retirado) o 502/503 (saturación): mejor probar el siguiente modelo ya.
+      if (status === 404 || status === 502 || status === 503) break;
+      // 500/504: un reintento del mismo modelo antes de pasar al siguiente.
       if (attempt < CONFIG.GEMINI_MAX_ATTEMPTS) Utilities.sleep(CONFIG.GEMINI_RETRY_MS * attempt);
     }
   }
@@ -1035,22 +1047,23 @@ function probarGemini() {
     return lines.join('\n');
   }
 
+  var chain = geminiModelChain_();
   var list = geminiListModels_(apiKey);
   if (!list.ok) {
     lines.push('ListModels: FALLA — ' + list.detail);
   } else {
     lines.push('ListModels: OK (' + list.models.length + ' modelos)');
-    [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
-      if (!model) return;
+    chain.forEach(function (model) {
       lines.push('  ' + model + ': ' + (list.models.indexOf(model) > -1 ? 'disponible' : 'NO disponible'));
     });
     lines.push('  familia disponible: ' + list.models.slice(0, 10).join(', '));
   }
 
-  [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
-    if (!model) return;
+  chain.forEach(function (model) {
+    var started = Date.now();
     var result = geminiPing_(model);
-    lines.push(model + ': ' + (result.ok ? 'OK' : 'FALLA — ' + result.detail));
+    var elapsed = Date.now() - started;
+    lines.push(model + ': ' + (result.ok ? 'OK' : 'FALLA — ' + result.detail) + ' (' + elapsed + ' ms)');
   });
 
   lines.push('');
