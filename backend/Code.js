@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.0.0';
+var VERSION = '1.1.0';
 
 /**
  * Valores de referencia.
@@ -574,6 +574,25 @@ function geminiExtract_(base64, mimeType) {
   return { ok: true, data: parsed, model: result.model };
 }
 
+/** Extrae el motivo de Google (ej. ACCESS_TOKEN_TYPE_UNSUPPORTED) sin exponer secretos. */
+function geminiReason_(text) {
+  try {
+    var parsed = JSON.parse(String(text || ''));
+    var error = parsed && parsed.error;
+    if (!error) return '';
+    var reason = '';
+    var details = error.details || [];
+    for (var i = 0; i < details.length; i++) {
+      if (details[i] && details[i].reason) { reason = String(details[i].reason); break; }
+    }
+    var message = error.message ? String(error.message) : '';
+    if (reason && message.indexOf(reason) === -1) message = (message ? message + ' — ' : '') + reason;
+    return message.slice(0, 160);
+  } catch (err) {
+    return '';
+  }
+}
+
 /** Traduce un fallo de Gemini a un mensaje accionable para la PWA. */
 function geminiFailure_(result) {
   var status = result.status || 0;
@@ -586,7 +605,13 @@ function geminiFailure_(result) {
     return { ok: false, code: 'QUOTA', message: 'Se alcanzó el límite de la IA. Esperá un minuto y reintentá.', detail: detail };
   }
   if (status === 400 || status === 401 || status === 403) {
-    return { ok: false, code: 'CONFIG', message: 'La IA rechazó la solicitud. Avisale al administrador.', detail: detail };
+    var why = redact_(geminiReason_(result.text));
+    return {
+      ok: false,
+      code: 'CONFIG',
+      message: 'La IA rechazó la solicitud (HTTP ' + status + (why ? ': ' + why : '') + '). Revisá la API key en AI Studio.',
+      detail: detail
+    };
   }
   if (status === 404) {
     return { ok: false, code: 'CONFIG', message: 'El modelo de IA configurado no está disponible. Avisale al administrador.', detail: detail };
@@ -935,8 +960,9 @@ function selfTest(runGemini) {
     problems.push('AUTHORIZED_EMAIL no parece un email válido.');
   }
   var apiKey = setting_('GEMINI_API_KEY');
-  if (apiKey && !isPlaceholder_(apiKey) && !/^AIza[0-9A-Za-z_\-]{20,}$/.test(apiKey)) {
-    warnings.push('GEMINI_API_KEY no tiene el formato típico (AIza…).');
+  if (apiKey && !isPlaceholder_(apiKey) &&
+      !/^(AIza[0-9A-Za-z_\-]{20,}|AQ\.[0-9A-Za-z_.\-]{20,})$/.test(apiKey)) {
+    warnings.push('GEMINI_API_KEY no tiene un formato conocido (AIza… o AQ.…).');
   }
   var clientId = setting_('GOOGLE_CLIENT_ID');
   if (clientId && !isPlaceholder_(clientId) && !/\.apps\.googleusercontent\.com$/.test(clientId)) {

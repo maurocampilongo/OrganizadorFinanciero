@@ -177,14 +177,20 @@ números, un guion y letras. La app lo valida con ese formato exacto.
 1. Entrá a <https://aistudio.google.com/apikey> con la misma cuenta.
 2. **Create API key**.
 3. Elegí el proyecto que creaste (o “Create API key in new project”).
-4. Copiá la key (`AIza...`). Anotála como **valor 4**.
+4. Abrí el detalle de la key y usá **Copy key** (la lista muestra una versión recortada
+   que **no funciona**). Anotála como **valor 4**.
 
-**Punto de control:** la key empieza con `AIza` y tiene ~39 caracteres.
-`selfTest()` avisa si el formato no parece válido.
+**Punto de control:** desde mayo 2026 las claves nuevas son **`AQ.`** de 53 caracteres;
+las `AIza…` (~39) anteriores siguen funcionando. `selfTest()` acepta ambos formatos.
 
-> El modelo configurado es `gemini-2.5-flash` (capa gratuita). Si tu proyecto no
-> lo tuviera disponible, cambiá `CONFIG.GEMINI_MODEL` en `backend/Code.js` por
-> `gemini-2.0-flash` y volvé a desplegar.
+> Si tu proyecto rechaza la `AQ.` con `ACCESS_TOKEN_TYPE_UNSUPPORTED` (bug conocido del
+> endpoint REST), creá una clave **estándar** en Cloud Console → Credenciales → Crear
+> credenciales → Clave de API y **restringila a *Generative Language API*** (las claves
+> estándar sin restricción se rechazan desde mayo 2026). Pegala en `GEMINI_API_KEY`.
+
+> El modelo configurado es `gemini-2.5-flash` (capa gratuita) con `gemini-2.0-flash`
+> como respaldo automático. Podés cambiarlos en `CONFIG.GEMINI_MODEL` y
+> `CONFIG.GEMINI_MODEL_FALLBACK` y volver a desplegar.
 
 ---
 
@@ -300,7 +306,7 @@ configurado`).
    ```
 4. Elegí **`selfTest`** → **Ejecutar**. Esperado:
    ```
-   == Organizador Financiero — selfTest 1.0.0 ==
+   == Organizador Financiero — selfTest 1.1.0 ==
    Zona horaria del script: America/Argentina/Buenos_Aires | Hoy: 2026-11-22
 
    AUTHORIZED_EMAIL: properties -> m***o@gmail.com
@@ -358,7 +364,7 @@ Si hay problemas, el detalle te dice qué propiedad falta o qué no puede abrir.
 HTTP/2 200
 content-type: application/json; charset=utf-8
 
-{"ok":true,"version":"1.0.0"}
+{"ok":true,"version":"1.1.0"}
 ```
 
 | Si en vez de eso ves… | Significa |
@@ -493,7 +499,7 @@ izquierda), el monto con dos decimales y la columna `Registrado` con fecha y hor
 
 ## 14. Verificación final (5 minutos)
 
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.0.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.0"}`.
 - [ ] `selfTest()` devuelve `PROBLEMAS (0)` y `RESULTADO: listo para usar.`
 - [ ] `selfTest(true)` responde `Gemini: OK (gemini-2.5-flash)`.
 - [ ] Login desde la URL de Pages con tu cuenta.

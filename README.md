@@ -101,8 +101,15 @@ y los formatos correctos.
 ## Paso 3 — API key de Gemini
 
 1. Entrá a <https://aistudio.google.com/apikey> con la misma cuenta.
-2. **Create API key** → elegí el proyecto → copiá la key (`AIza...`).
-3. El modelo usado es `gemini-2.5-flash`, disponible en el plan gratuito.
+2. **Create API key** → elegí el proyecto → **Copy key** (la lista muestra la key
+   recortada: abrí el detalle y usá *Copy key* para copiar la completa).
+3. Desde mayo 2026 AI Studio emite claves con formato **`AQ.`** (53 caracteres); las
+   `AIza…` anteriores siguen funcionando. El modelo usado es `gemini-2.5-flash`.
+
+> Si tu proyecto rechaza la clave `AQ.` con `ACCESS_TOKEN_TYPE_UNSUPPORTED` (bug
+> conocido del endpoint REST), creá una clave **estándar** en Cloud Console →
+> Credenciales → Crear credenciales → Clave de API, y **restringila a *Generative
+> Language API*** (desde mayo 2026 las claves estándar sin restricción se rechazan).
 
 ## Paso 4 — Subir el backend con `clasp`
 
@@ -177,7 +184,7 @@ y `selfTest()` te dice exactamente cuál falta. Las Propiedades del script
    curl -sS -X POST "https://script.google.com/macros/s/XXXX/exec" \
      -H 'Content-Type: text/plain' \
      --data '{"action":"ping"}'
-   # -> {"ok":true,"version":"1.0.0"}
+   # -> {"ok":true,"version":"1.1.0"}
    ```
 
 > Cada cambio de código necesita una **nueva versión**. `clasp deploy` sin más crea
@@ -340,7 +347,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 
 - [ ] `APP_CONFIG.CLIENT_ID` y `BACKEND_URL` completos (sin `PEGAR_`).
 - [ ] Script Properties cargadas y `selfTest()` con `PROBLEMAS (0)`.
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.0.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.0"}`.
 - [ ] Implementación: *Ejecutar como* vos y *Acceso* **Cualquier persona**.
 - [ ] Origen `https://TU_USUARIO.github.io` autorizado en Cloud Console.
 - [ ] `git status` no muestra `.clasp.json` ni `.clasprc.json`.
