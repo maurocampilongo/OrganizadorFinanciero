@@ -257,8 +257,9 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 ## Uso diario
 
 1. Abrí la app e ingresá con Google (la sesión dura ~1 hora y se renueva volviendo a entrar).
-2. Opcional: **📷 Foto del ticket** → la imagen se comprime a 1024 px / JPEG 0.75 en el
-   celular y Gemini autocompleta los 5 campos.
+2. Opcional: **📷 Foto del ticket** (o arrastrá la imagen al área, o pegala con `Ctrl+V`).
+   La imagen se comprime a 1024 px / JPEG 0.75 en el celular y Gemini autocompleta los
+   5 campos. Si la lectura falla, **🔄 Leer de nuevo** reintenta sin volver a elegirla.
 3. Revisá el aviso amarillo **“Revisá y corregí los datos extraídos antes de guardar”**.
    Los campos autocompletados quedan con borde verde hasta que los toques.
 4. **Guardar gasto** → aparece `Guardado ✔ (fila N)`.

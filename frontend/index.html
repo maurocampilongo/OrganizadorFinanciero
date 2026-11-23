@@ -97,8 +97,13 @@
 
     .gsi-slot { margin: 16px 0 8px; min-height: 44px; display: flex; }
 
-    .capture { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
-    .capture .btn { width: auto; flex: 1 1 200px; }
+    .capture {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px;
+      border-radius: 12px; transition: background 0.15s ease;
+    }
+    .capture.dragover { background: rgba(245, 179, 1, 0.08); outline: 2px dashed var(--accent); outline-offset: 3px; }
+    .capture.dragover .hint { color: var(--accent); }
+    .capture .btn { flex: 1 1 100%; }
     .hint { color: var(--muted); font-size: 0.8rem; flex: 1 1 100%; }
     .thumb-wrap { flex: 1 1 100%; }
     .thumb-wrap[hidden] { display: none; }
@@ -106,6 +111,7 @@
       display: block; max-width: 100%; max-height: 170px; border-radius: 10px;
       border: 1px solid var(--line); background: #fff;
     }
+    .thumb-actions { display: flex; gap: 8px; margin-top: 8px; }
 
     .field { margin-bottom: 14px; }
     label {
@@ -203,14 +209,20 @@
       </section>
 
       <section class="card" id="app-card" hidden>
-        <div class="capture">
+        <div class="capture" id="dropzone">
           <input type="file" id="foto" accept="image/*" capture="environment" hidden>
           <button type="button" class="btn btn-secondary" id="btn-foto">
             <span aria-hidden="true">📷</span> Foto del ticket
           </button>
-          <span class="hint" id="foto-status" role="status" aria-live="polite">Opcional: sacá o subí una foto y completamos los campos.</span>
+          <button type="button" class="btn btn-secondary" id="btn-leer" hidden>
+            <span aria-hidden="true">📖</span> Leer ticket
+          </button>
+          <span class="hint" id="foto-status" role="status" aria-live="polite">Opcional: arrastrá la foto acá, pegala con Ctrl+V o tocá el botón para sacarla.</span>
           <div class="thumb-wrap" id="thumb-wrap" hidden>
             <img id="thumb" alt="Vista previa del comprobante" decoding="async">
+            <div class="thumb-actions">
+              <button type="button" class="ghost" id="btn-quitar-foto">Quitar foto</button>
+            </div>
           </div>
         </div>
 
@@ -284,7 +296,9 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.0.0';
+    const VERSION = '1.1.0';
+
+    const PHOTO_HINT = 'Opcional: arrastrá la foto acá, pegala con Ctrl+V o tocá el botón para sacarla.';
 
     const state = {
       token: null,
@@ -292,8 +306,11 @@
       email: '',
       expiryTimer: null,
       busy: false,
+      saving: false,
       installPrompt: null,
-      thumbUrl: ''
+      thumbUrl: '',
+      image: null,
+      readDone: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -676,30 +693,69 @@
       $('thumb-wrap').hidden = true;
     }
 
-    async function onPhotoSelected(event) {
-      const input = event.target;
-      const file = input.files && input.files[0];
-      if (!file || state.busy) return;
+    /** Mantiene sincronizados los botones de foto y el label de guardar. */
+    function syncPhotoButtons() {
+      const hasImage = !!state.image;
+      const readButton = $('btn-leer');
+      readButton.hidden = !hasImage;
+      readButton.disabled = state.busy || !hasImage;
+      readButton.textContent = state.readDone ? '🔄 Leer de nuevo' : '📖 Leer ticket';
+      $('btn-quitar-foto').disabled = state.busy;
+      $('btn-save').textContent = state.saving ? 'Guardando…' : 'Guardar gasto';
+    }
 
-      setBusy(true, 'Leyendo ticket…');
-      setFotoStatus('Comprimiendo la foto…');
+    function clearPhoto() {
+      state.image = null;
+      state.readDone = false;
+      hideThumbnail();
+      syncPhotoButtons();
+    }
+
+    /**
+     * Recibe un File (input, drag & drop o Ctrl+V), lo comprime y dispara la
+     * lectura automática: elegir la foto ya alcanza para ver el formulario lleno.
+     */
+    async function handleFile(file) {
+      if (!file || state.busy) return;
+      clearPhoto();
+      setFotoStatus('Preparando la foto…');
+      setBusy(true);
       try {
         const compressed = await compressImage(file);
+        state.image = compressed;
         showThumbnail(compressed.dataUrl);
-        setFotoStatus('Foto lista (' + formatKb(file.size) + ' → ' + formatKb(compressed.bytes) + '). Leyendo con IA…');
-
-        const result = await api('extract', {
-          image: compressed.base64,
-          mimeType: compressed.mimeType
-        }, APP_CONFIG.EXTRACT_TIMEOUT_MS);
-
-        applyExtraction(result.data, result.warnings);
-        setFotoStatus('Datos extraídos. Revisalos antes de guardar.', 'ok');
+        syncPhotoButtons();
+        setFotoStatus('Foto lista (' + formatKb(file.size) + ' → ' + formatKb(compressed.bytes) + '). Leyendo el ticket con IA…');
       } catch (err) {
         setFotoStatus(err && err.message ? err.message : 'No pudimos procesar la foto.', 'error');
       } finally {
         setBusy(false);
-        input.value = '';
+      }
+      if (state.image) await leerTicket();
+    }
+
+    /** Llama a Gemini con la imagen ya cargada y autocompleta los 5 campos. */
+    async function leerTicket() {
+      if (state.busy) return;
+      if (!state.image) {
+        setFotoStatus('Primero elegí, arrastrá o pegá una foto del ticket.', 'error');
+        return;
+      }
+      setBusy(true);
+      setFotoStatus('Leyendo el ticket con IA…');
+      try {
+        const result = await api('extract', {
+          image: state.image.base64,
+          mimeType: state.image.mimeType
+        }, APP_CONFIG.EXTRACT_TIMEOUT_MS);
+        applyExtraction(result.data, result.warnings);
+        state.readDone = true;
+        setFotoStatus('Datos extraídos. Revisalos antes de guardar.', 'ok');
+      } catch (err) {
+        state.readDone = false;
+        setFotoStatus((err && err.message ? err.message : 'No pudimos leer el ticket.') + ' Podés reintentar o cargar a mano.', 'error');
+      } finally {
+        setBusy(false);
       }
     }
 
@@ -768,7 +824,12 @@
       banner.hidden = false;
 
       try { $('app-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
-      if (!concepto.value) concepto.focus(); else monto.focus();
+
+      // En el celular no abrimos el teclado solo: taparía los datos a revisar.
+      const finePointer = !!(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
+      if (finePointer) {
+        if (!concepto.value) concepto.focus(); else monto.focus();
+      }
     }
 
     function readForm() {
@@ -792,13 +853,13 @@
       return '';
     }
 
-    function setBusy(busy, label) {
+    function setBusy(busy) {
       state.busy = Boolean(busy);
       ['btn-save', 'btn-foto', 'btn-prev-day', 'btn-next-day', 'foto'].forEach((id) => {
         const element = $(id);
         if (element) element.disabled = state.busy;
       });
-      $('btn-save').textContent = state.busy ? (label || 'Guardando…') : 'Guardar gasto';
+      syncPhotoButtons();
     }
 
     function resetAfterSave() {
@@ -806,11 +867,11 @@
       // varios tickets del mismo día.
       $('concepto').value = '';
       $('monto').value = '';
-      hideThumbnail();
-      setFotoStatus('Opcional: sacá o subí una foto y completamos los campos.');
+      clearPhoto();
+      setFotoStatus(PHOTO_HINT);
       clearAutofillMarks();
       hideReviewBanner();
-      $('concepto').focus();
+      if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) $('concepto').focus();
     }
 
     async function onSubmit(event) {
@@ -832,15 +893,18 @@
         return;
       }
 
-      setBusy(true, 'Guardando…');
+      state.saving = true;
+      setBusy(true);
       setFormStatus('Guardando…');
       try {
         const result = await api('save', data, APP_CONFIG.FETCH_TIMEOUT_MS);
         setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
+        state.saving = false;
         resetAfterSave();
       } catch (err) {
         setFormStatus(err && err.message ? err.message : 'No pudimos guardar el gasto.', 'error');
       } finally {
+        state.saving = false;
         setBusy(false);
       }
     }
@@ -873,10 +937,73 @@
 
     function initPhotoField() {
       const input = $('foto');
+      const dropzone = $('dropzone');
+
       $('btn-foto').addEventListener('click', () => {
         if (!state.busy) input.click();
       });
-      input.addEventListener('change', onPhotoSelected);
+
+      input.addEventListener('change', (event) => {
+        const file = event.target.files && event.target.files[0];
+        // Se limpia el input para poder elegir la misma foto otra vez.
+        event.target.value = '';
+        if (file) handleFile(file);
+      });
+
+      $('btn-leer').addEventListener('click', () => leerTicket());
+      $('btn-quitar-foto').addEventListener('click', () => {
+        if (state.busy) return;
+        clearPhoto();
+        setFotoStatus(PHOTO_HINT);
+      });
+
+      // --- Arrastrar y soltar (escritorio / tablet con mouse) ---
+      let dragDepth = 0;
+      ['dragenter', 'dragover'].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (name === 'dragenter') dragDepth++;
+          dropzone.classList.add('dragover');
+        });
+      });
+      ['dragleave', 'dragend'].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dragDepth = Math.max(0, dragDepth - 1);
+          if (dragDepth === 0) dropzone.classList.remove('dragover');
+        });
+      });
+      dropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth = 0;
+        dropzone.classList.remove('dragover');
+        const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+        if (file) handleFile(file);
+      });
+
+      // Evita que el navegador abra la imagen si se suelta fuera de la zona.
+      window.addEventListener('dragover', (event) => event.preventDefault());
+      window.addEventListener('drop', (event) => event.preventDefault());
+
+      // --- Pegar una captura con Ctrl+V ---
+      document.addEventListener('paste', (event) => {
+        if ($('app-card').hidden || state.busy) return;
+        const items = event.clipboardData && event.clipboardData.items;
+        if (!items) return;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.indexOf('image/') === 0) {
+            const file = items[i].getAsFile();
+            if (file) {
+              event.preventDefault();
+              handleFile(file);
+              break;
+            }
+          }
+        }
+      });
     }
 
     /**
@@ -961,6 +1088,8 @@
           configProblems: configProblems
         },
         applyExtraction: applyExtraction,
+        handleFile: handleFile,
+        leerTicket: leerTicket,
         readForm: readForm,
         validate: validate,
         setSignedIn: setSignedIn,
@@ -978,6 +1107,8 @@
       fillSelect($('persona'), APP_CONFIG.PERSONAS);
       initDateField();
       initPhotoField();
+      setFotoStatus(PHOTO_HINT);
+      syncPhotoButtons();
       initMontoField();
       initInstall();
       updateConnectivity();
@@ -1007,7 +1138,9 @@
         if (state.exp - APP_CONFIG.EXPIRY_MARGIN_MS <= Date.now()) handleAuthFailure();
       });
 
-      if (new URLSearchParams(location.search).has('debug')) exposeDebugHook();
+      // Solo en desarrollo local: en producción no exponemos helpers internos.
+      const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+      if (isLocal && new URLSearchParams(location.search).has('debug')) exposeDebugHook();
     }
 
     init();
