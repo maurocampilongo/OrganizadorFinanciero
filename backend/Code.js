@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.1.1';
+var VERSION = '1.2.0';
 
 /**
  * Valores de referencia.
@@ -45,8 +45,9 @@ var CONFIG = {
   GOOGLE_CLIENT_ID: 'PEGAR_CLIENT_ID.apps.googleusercontent.com',
   SHEET_ID: '',
 
-  GEMINI_MODEL: 'gemini-2.5-flash',
-  GEMINI_MODEL_FALLBACK: 'gemini-2.0-flash',
+  GEMINI_MODEL: 'gemini-3.8-flash',
+  GEMINI_MODEL_FALLBACK: 'gemini-3.7-flash',
+  GEMINI_MAX_OUTPUT_TOKENS: 8192,
   GEMINI_MAX_ATTEMPTS: 2,
   GEMINI_RETRY_MS: 800,
   SHEET_NAME: 'Gastos',
@@ -627,7 +628,7 @@ function geminiPayload_(model, base64, mimeType) {
   var generationConfig = {
     temperature: 0.1,
     topP: 0.8,
-    maxOutputTokens: 700,
+    maxOutputTokens: CONFIG.GEMINI_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: geminiSchema_()
   };
@@ -1025,7 +1026,26 @@ function selfTest(runGemini) {
  */
 function probarGemini() {
   var lines = [];
-  lines.push('== prueba de Gemini (key: ' + maskSecret_(setting_('GEMINI_API_KEY')) + ') ==');
+  var apiKey = setting_('GEMINI_API_KEY');
+  lines.push('== prueba de Gemini (key: ' + maskSecret_(apiKey) + ') ==');
+
+  if (isPlaceholder_(apiKey)) {
+    lines.push('Falta GEMINI_API_KEY en las Propiedades del script.');
+    console.log(lines.join('\n'));
+    return lines.join('\n');
+  }
+
+  var list = geminiListModels_(apiKey);
+  if (!list.ok) {
+    lines.push('ListModels: FALLA — ' + list.detail);
+  } else {
+    lines.push('ListModels: OK (' + list.models.length + ' modelos)');
+    [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
+      if (!model) return;
+      lines.push('  ' + model + ': ' + (list.models.indexOf(model) > -1 ? 'disponible' : 'NO disponible'));
+    });
+    lines.push('  familia disponible: ' + list.models.slice(0, 10).join(', '));
+  }
 
   [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
     if (!model) return;
@@ -1034,44 +1054,66 @@ function probarGemini() {
   });
 
   lines.push('');
-  lines.push('Si ves ACCESS_TOKEN_TYPE_UNSUPPORTED: generá una clave AIza en Cloud Console');
-  lines.push('(Credenciales → Crear credenciales → Clave de API) y restringila a Generative Language API.');
-  lines.push('Si ves 503/500: es sobrecarga transitoria; el backend reintenta y usa el respaldo.');
+  lines.push('Si un modelo dice "NO disponible": copiá uno de la lista en CONFIG.GEMINI_MODEL.');
+  lines.push('Si aparece HTTP 401/403: revisá la key (o usá una AIza restringida a Generative Language API).');
+  lines.push('Si aparece HTTP 429/5xx: cuota o sobrecarga; reintentá.');
 
   console.log(lines.join('\n'));
   return lines.join('\n');
 }
 
+/** Modelos disponibles para la key (GET /v1beta/models). */
+function geminiListModels_(apiKey) {
+  try {
+    var response = UrlFetchApp.fetch(CONFIG.GEMINI_ENDPOINT + '?pageSize=1000', {
+      method: 'get',
+      headers: { 'x-goog-api-key': apiKey },
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) {
+      return { ok: false, detail: 'HTTP ' + response.getResponseCode() + ' ' + redact_(response.getContentText()).slice(0, 200) };
+    }
+    var data = JSON.parse(response.getContentText());
+    var models = (data.models || []).map(function (model) {
+      return String(model.name || '').replace(/^models\//, '');
+    }).filter(function (name) {
+      return name.indexOf('gemini') === 0;
+    });
+    return { ok: true, models: models };
+  } catch (err) {
+    return { ok: false, detail: redact_(err.message || err) };
+  }
+}
+
+/** Prueba real de generación con un modelo concreto. */
 function geminiPing_(model) {
   model = model || CONFIG.GEMINI_MODEL;
   var apiKey = setting_('GEMINI_API_KEY');
   if (isPlaceholder_(apiKey)) return { ok: false, detail: 'falta la API key' };
 
-  // thinkingConfig solo existe en la familia 2.5: el respaldo 2.0 lo rechazaría.
-  var generationConfig = { temperature: 0, maxOutputTokens: 8 };
-  if (/^gemini-2\.5/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-
   var url = CONFIG.GEMINI_ENDPOINT + '/' + encodeURIComponent(model) + ':generateContent';
+  var payload = {
+    contents: [{ role: 'user', parts: [{ text: 'Respondé solo con la palabra OK.' }] }],
+    generationConfig: { temperature: 0, maxOutputTokens: CONFIG.GEMINI_MAX_OUTPUT_TOKENS }
+  };
+
   try {
     var response = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
       headers: { 'x-goog-api-key': apiKey },
-      payload: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: 'Respondé solo con la palabra OK.' }] }],
-        generationConfig: generationConfig
-      }),
+      payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
 
     if (response.getResponseCode() !== 200) {
-      return { ok: false, detail: 'HTTP ' + response.getResponseCode() + ' ' + redact_(response.getContentText()).slice(0, 160) };
+      return { ok: false, detail: 'HTTP ' + response.getResponseCode() + ' ' + redact_(response.getContentText()).slice(0, 200) };
     }
     var data = JSON.parse(response.getContentText());
     var candidate = data && data.candidates && data.candidates[0];
     var parts = (candidate && candidate.content && candidate.content.parts) || [];
     var text = parts.map(function (part) { return part && part.text ? part.text : ''; }).join('').trim();
-    return { ok: !!text, detail: text ? '' : 'respuesta vacía' };
+    return { ok: !!text, detail: text ? '' : 'respuesta vacía; finishReason=' + (candidate && candidate.finishReason) };
   } catch (err) {
     return { ok: false, detail: redact_(err.message || err) };
   }

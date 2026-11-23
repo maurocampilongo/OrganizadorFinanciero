@@ -104,7 +104,7 @@ y los formatos correctos.
 2. **Create API key** → elegí el proyecto → **Copy key** (la lista muestra la key
    recortada: abrí el detalle y usá *Copy key* para copiar la completa).
 3. Desde mayo 2026 AI Studio emite claves con formato **`AQ.`** (53 caracteres); las
-   `AIza…` anteriores siguen funcionando. El modelo usado es `gemini-2.5-flash`.
+   `AIza…` anteriores siguen funcionando. El modelo usado es `gemini-3.8-flash`.
 
 > Si tu proyecto rechaza la clave `AQ.` con `ACCESS_TOKEN_TYPE_UNSUPPORTED` (bug
 > conocido del endpoint REST), creá una clave **estándar** en Cloud Console →
@@ -186,7 +186,7 @@ y `selfTest()` te dice exactamente cuál falta. Las Propiedades del script
    curl -sS -X POST "https://script.google.com/macros/s/XXXX/exec" \
      -H 'Content-Type: text/plain' \
      --data '{"action":"ping"}'
-   # -> {"ok":true,"version":"1.1.1"}
+   # -> {"ok":true,"version":"1.2.0"}
    ```
 
 > Cada cambio de código necesita una **nueva versión**. `clasp deploy` sin más crea
@@ -296,7 +296,7 @@ Detalles del formulario:
 | Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | idem |
 | Nombre de la hoja | `CONFIG.SHEET_NAME` | por defecto `Gastos` |
 | Columnas | `CONFIG.HEADERS` | si las cambiás en una hoja existente, `setup()` reescribe la fila 1 |
-| Modelo de IA | `CONFIG.GEMINI_MODEL` (y `GEMINI_MODEL_FALLBACK`) | por defecto `gemini-2.5-flash`, con `gemini-2.0-flash` de respaldo |
+| Modelo de IA | `CONFIG.GEMINI_MODEL` (y `GEMINI_MODEL_FALLBACK`) | por defecto `gemini-3.8-flash`, con `gemini-3.7-flash` de respaldo |
 | Compresión de foto | `APP_CONFIG.MAX_IMAGE_WIDTH` y `JPEG_QUALITY` | 1024 px y 0.75 |
 | Límites del backend | `CONFIG.MAX_MONTO`, `MAX_BODY_CHARS`, `MAX_IMAGE_BASE64_CHARS` | si los subís, revisá el tamaño de la imagen comprimida |
 
@@ -349,7 +349,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 
 - [ ] `APP_CONFIG.CLIENT_ID` y `BACKEND_URL` completos (sin `PEGAR_`).
 - [ ] Script Properties cargadas y `selfTest()` con `PROBLEMAS (0)`.
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.1"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.2.0"}`.
 - [ ] Implementación: *Ejecutar como* vos y *Acceso* **Cualquier persona**.
 - [ ] Origen `https://TU_USUARIO.github.io` autorizado en Cloud Console.
 - [ ] `git status` no muestra `.clasp.json` ni `.clasprc.json`.
@@ -366,7 +366,8 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 | “El servidor no está configurado todavía” | faltan Propiedades del script | corré `selfTest()` y cargá las que marca |
 | “La IA rechazó la solicitud” | API key inválida, API deshabilitada o proyecto sin acceso | `probarGemini` y revisá la key en AI Studio |
 | “Se alcanzó el límite de la IA” | cuota gratuita agotada momentáneamente | esperá un minuto y reintentá |
-| “La IA no está disponible ahora (HTTP 5xx)” | sobrecarga/caída transitoria de Gemini | reintentá; el backend ya reintenta y cae a `gemini-2.0-flash` |
+| “La IA no está disponible ahora (HTTP 5xx)” | sobrecarga/caída transitoria de Gemini | reintentá; el backend ya reintenta y cae a `gemini-3.7-flash` |
+| “El modelo de IA configurado no está disponible” | Google retiró ese modelo (ej. 2.5/2.0) | `probarGemini` y poné un modelo de la lista en `CONFIG.GEMINI_MODEL` |
 | “No pudimos conectar con el servidor” | URL mal copiada, sin internet o implementación privada | usá la URL `/exec` y *Acceso: Cualquier persona* |
 | Error de CORS / preflight | se cambió el `Content-Type` a `application/json` | dejá `text/plain;charset=utf-8` (ya está así) |
 | La app no ofrece instalarse | falta HTTPS/manifest/SW o ya está instalada | abrí la URL de Pages en Chrome, no un archivo local |

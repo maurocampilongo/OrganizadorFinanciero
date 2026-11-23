@@ -188,7 +188,7 @@ las `AIza…` (~39) anteriores siguen funcionando. `selfTest()` acepta ambos for
 > credenciales → Clave de API y **restringila a *Generative Language API*** (las claves
 > estándar sin restricción se rechazan desde mayo 2026). Pegala en `GEMINI_API_KEY`.
 
-> El modelo configurado es `gemini-2.5-flash` (capa gratuita) con `gemini-2.0-flash`
+> El modelo configurado es `gemini-3.8-flash` (capa gratuita) con `gemini-3.7-flash`
 > como respaldo automático. Podés cambiarlos en `CONFIG.GEMINI_MODEL` y
 > `CONFIG.GEMINI_MODEL_FALLBACK` y volver a desplegar.
 
@@ -306,7 +306,7 @@ configurado`).
    ```
 4. Elegí **`selfTest`** → **Ejecutar**. Esperado:
    ```
-   == Organizador Financiero — selfTest 1.1.1 ==
+   == Organizador Financiero — selfTest 1.2.0 ==
    Zona horaria del script: America/Argentina/Buenos_Aires | Hoy: 2026-11-22
 
    AUTHORIZED_EMAIL: properties -> m***o@gmail.com
@@ -366,7 +366,7 @@ Si hay problemas, el detalle te dice qué propiedad falta o qué no puede abrir.
 HTTP/2 200
 content-type: application/json; charset=utf-8
 
-{"ok":true,"version":"1.1.1"}
+{"ok":true,"version":"1.2.0"}
 ```
 
 | Si en vez de eso ves… | Significa |
@@ -501,9 +501,9 @@ izquierda), el monto con dos decimales y la columna `Registrado` con fecha y hor
 
 ## 14. Verificación final (5 minutos)
 
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.1"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.2.0"}`.
 - [ ] `selfTest()` devuelve `PROBLEMAS (0)` y `RESULTADO: listo para usar.`
-- [ ] `probarGemini` muestra `gemini-2.5-flash: OK` (y el respaldo también).
+- [ ] `probarGemini` muestra `gemini-3.8-flash: OK` (y el respaldo también).
 - [ ] Login desde la URL de Pages con tu cuenta.
 - [ ] Gasto manual: aparece en la hoja, con fecha texto y monto numérico.
 - [ ] Gasto por foto: banner de revisión + 5 campos autocompletados.
@@ -542,6 +542,7 @@ la versión publicada anterior hasta que deployes.
 | `La IA rechazó la solicitud. Avisale al administrador.` | key inválida, API deshabilitada o key restringida | `probarGemini` y mirá el log de ejecución |
 | `Se alcanzó el límite de la IA. Esperá un minuto y reintentá.` | cuota 429 | esperá o revisá el plan en AI Studio |
 | `La IA no está disponible ahora (HTTP 5xx). Reintentá en un rato.` | sobrecarga transitoria de Gemini | reintentá; el backend reintenta y usa el modelo de respaldo |
+| `El modelo de IA configurado no está disponible.` (HTTP 404) | Google retiró ese modelo | `probarGemini` → copiá un modelo de la lista en `CONFIG.GEMINI_MODEL` |
 | `La IA no devolvió datos. Sacá otra foto o cargá a mano.` | foto ilegible / no es un ticket | mejor luz, encuadre o carga manual |
 | `Demasiadas fotos seguidas. Esperá un minuto.` | rate limit (15/min) | esperá 60 s |
 | `No pudimos conectar con el servidor. Revisá tu conexión.` | URL mal, implementación privada/borrada o sin internet | probá el `curl` del paso 8 |
