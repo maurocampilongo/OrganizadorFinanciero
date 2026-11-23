@@ -426,6 +426,36 @@ El workflow está en [`tests/github-workflow.yml`](tests/github-workflow.yml) y 
 el token automático del repo no puede crear archivos en esa carpeta. Desde entonces corre
 `npm test` en cada push a `main` y en cada PR.
 
+## Deploy automático del backend (opcional)
+
+Por defecto, cada cambio en `backend/` hay que pegarlo en el editor de Apps Script.
+Se puede automatizar con GitHub Actions + `clasp` (configuración única):
+
+1. Habilitá la **Apps Script API** en <https://script.google.com/home/usersettings>
+   con la cuenta dueña del script.
+2. Generá las credenciales de `clasp` una sola vez:
+   ```bash
+   npm install -g @google/clasp@3
+   clasp login
+   ```
+   Sin terminal propia podés usar <https://shell.cloud.google.com> (todo desde el navegador).
+3. En GitHub → **Settings → Secrets and variables → Actions**, agregá:
+
+   | Secreto | Valor |
+   |---------|-------|
+   | `CLASPRC_JSON` | todo el contenido de `~/.clasprc.json` |
+   | `APPS_SCRIPT_ID` | ID del proyecto (Apps Script → Configuración del proyecto) |
+   | `APPS_SCRIPT_DEPLOYMENT_ID` | el `AKfycb…` de la URL `/exec` |
+
+4. Copiá [`tests/github-workflow-deploy.yml`](tests/github-workflow-deploy.yml) a
+   `.github/workflows/deploy-backend.yml` (GitHub → *Add file → Create new file*).
+5. Listo: cada push a `main` que toque `backend/` sube el código y publica una versión
+   nueva **con la misma URL** (`clasp push` + `clasp deploy --deploymentId`).
+
+> ⚠️ `CLASPRC_JSON` es una credencial: va **solo** en GitHub Secrets, nunca al repo ni al chat.
+> La sesión se puede revocar en <https://myaccount.google.com/permissions> y el secreto borrar.
+> Si `clasp login` se hizo con otra cuenta (no la dueña del script), el push falla.
+
 ## Git
 
 Este repo quedó con los archivos **sin commitear** y **sin push** (regla del workspace).
