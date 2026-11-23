@@ -1,0 +1,16 @@
+{
+  "name": "organizador-financiero",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PWA de gastos personales + backend en Google Apps Script + Gemini",
+  "scripts": {
+    "test": "node tests/run.js",
+    "test:static": "node tests/static.test.js",
+    "test:backend": "node tests/backend.test.js",
+    "test:frontend": "node tests/frontend.test.js",
+    "serve": "python3 -m http.server 8000 --directory frontend"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

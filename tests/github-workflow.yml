@@ -1,0 +1,38 @@
+# Plantilla del workflow de GitHub Actions.
+#
+# El token automático de este repo NO puede crear archivos en .github/workflows/,
+# así que hay que copiarlo una sola vez desde la web de GitHub:
+#   Add file -> Create new file -> .github/workflows/test.yml -> pegar este contenido
+# Después de creado, los pushes normales no lo tocan y la CI corre sola.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar Chromium
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Correr las suites
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm test

@@ -1,7 +1,9 @@
 # Gastos — Organizador Financiero
 
+[![Tests](https://github.com/maurocampilongo/OrganizadorFinanciero/actions/workflows/test.yml/badge.svg)](https://github.com/maurocampilongo/OrganizadorFinanciero/actions/workflows/test.yml)
+
 PWA minimalista y mobile-first para cargar gastos personales desde el celular.
-La foto del ticket se procesa con **Gemini 2.5 Flash** y el gasto se guarda en un
+La foto del ticket se procesa con **Gemini 3.8 Flash** (con respaldo automático) y el gasto se guarda en un
 **Google Sheet** propio, sin AppSheet ni planillas de terceros.
 
 - Frontend: HTML + CSS + JavaScript puro (sin frameworks ni build).
@@ -309,8 +311,8 @@ Detalles del formulario:
 
 | Qué | Dónde | Nota |
 |-----|-------|------|
-| Categorías | `CONFIG.CATEGORIES` (backend) **y** `APP_CONFIG.CATEGORIAS` (frontend) | tienen que coincidir: el backend valida contra su lista |
-| Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | `Mauro` y `Anto`; el backend valida contra su lista |
+| Categorías | `CONFIG.CATEGORIES` (backend) | la app las trae con `meta` al iniciar sesión; `APP_CONFIG.CATEGORIAS` es solo el fallback inicial |
+| Personas | `CONFIG.PEOPLE` (backend) | `Mauro` y `Anto`; se traen con `meta`, igual que las categorías |
 | Nombre de la hoja | `CONFIG.SHEET_NAME` | por defecto `Gastos` |
 | Columnas | `CONFIG.HEADERS` | si las cambiás en una hoja existente, `setup()` reescribe la fila 1 |
 | Modelos de IA | `CONFIG.GEMINI_MODELS` | cadena `gemini-flash-lite-latest` → `gemini-3.8-flash` → `gemini-3.7-flash`; el backend **aprende** cuál responde mejor y lo pone primero (ranking en la Propiedad `GEMINI_MODEL_STATS`) |
@@ -398,18 +400,28 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 - **Gemini 2.5 Flash**: capa gratuita de AI Studio; si la superás, se cobra por uso.
 - **GitHub Pages**: gratuito para repositorios públicos (para privados necesitás plan pago).
 
-## Validación realizada
+## Tests y CI
 
-El proyecto se validó sin agregar archivos de test al repo (para mantenerlo mínimo):
+Las tres suites viven en `tests/` y no tienen dependencias npm:
 
-| Prueba | Resultado |
-|--------|-----------|
-| `node --check` de `Code.js`, `sw.js` y del JS embebido | OK |
-| HTML balanceado + JSON de `manifest.json` / `appsscript.json` | OK |
-| Validación estática (IDs, CSP, iconos, .gitignore, sin credenciales) | 38/38 |
-| Backend simulado (auth, tokeninfo, Gemini, Sheets, injection, límites, auditoría) | 57/57 |
-| Chromium headless real (render, fechas, compresión 2000→1024, guardado, sesión, SW offline, CSP, layout 320/390 px) | 72/72 |
-| Coma decimal en locale es-AR con teclado real (1234,56 / 12,5 / pegado 1.234,56) | OK |
+```bash
+npm test              # corre las 3 (~220 checks)
+npm run test:static   # HTML/JS/CSP/manifest, sin navegador
+npm run test:backend  # simulación de Apps Script (auth, Gemini, Sheets, límites)
+npm run test:frontend # Chromium headless: UI, fechas, fotos, PWA, share target
+```
+
+| Suite | Cobertura | Checks |
+|-------|-----------|--------|
+| `static` | HTML/JS inline, CSP, IDs, manifest, iconos, sin credenciales | 40 |
+| `backend` | auth JWT, extracción, cadena de modelos, guardado, duplicados, deshacer, resumen, auditoría | 77 |
+| `frontend` | render, fechas, compresión, extracción, guardado, sesión, PWA, offline, share target, resumen, meta | 103 |
+
+Requiere Node 22+ y un Chromium del sistema (`CHROME_BIN` para indicar otro).
+El workflow está en [`tests/github-workflow.yml`](tests/github-workflow.yml) y se copia
+**una sola vez** a `.github/workflows/test.yml` (GitHub → *Add file → Create new file*):
+el token automático del repo no puede crear archivos en esa carpeta. Desde entonces corre
+`npm test` en cada push a `main` y en cada PR.
 
 ## Git
 

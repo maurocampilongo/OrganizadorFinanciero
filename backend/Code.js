@@ -36,7 +36,7 @@
 
 'use strict';
 
-var VERSION = '1.7.0';
+var VERSION = '1.8.0';
 
 /**
  * Valores de referencia.
@@ -351,7 +351,7 @@ function doPost(e) {
 
     var action = typeof body.action === 'string' ? body.action.trim() : '';
     if (action === 'ping') return ok_({ version: VERSION });
-    if (action !== 'extract' && action !== 'save' && action !== 'delete' && action !== 'summary') {
+    if (action !== 'extract' && action !== 'save' && action !== 'delete' && action !== 'summary' && action !== 'meta') {
       return fail_('BAD_REQUEST', 'Acción desconocida.');
     }
 
@@ -367,6 +367,11 @@ function doPost(e) {
 
     if (rateLimited_('global:' + auth.email, 60, 60)) {
       return fail_('LIMIT', 'Demasiadas solicitudes. Esperá un minuto.');
+    }
+
+    // Categorías y personas vigentes: la app las toma de acá al iniciar sesión.
+    if (action === 'meta') {
+      return ok_({ version: VERSION, categories: CONFIG.CATEGORIES, people: CONFIG.PEOPLE });
     }
 
     if (action === 'extract') {

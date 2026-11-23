@@ -19,6 +19,9 @@ desktop.ini
 *.swp
 *~
 
+# --- Node (por si se agregan scripts locales) ---
+node_modules/
+
 # --- Logs y temporales ---
 *.log
 npm-debug.log*

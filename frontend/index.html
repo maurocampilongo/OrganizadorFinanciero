@@ -391,7 +391,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.8.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.9.0</span></span>
     </footer>
   </div>
 
@@ -418,7 +418,7 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.8.0';
+    const VERSION = '1.9.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
     const SHARE_CACHE = 'gastos-share-v1';
@@ -594,6 +594,7 @@
         setTimeout(applyPendingAction, 250);
         setTimeout(applyPendingShare, 350);
         setTimeout(loadSummary, 450);
+        setTimeout(loadMeta, 300);
       }
     }
 
@@ -1324,6 +1325,7 @@
         handleFile: handleFile,
         applyPendingShare: applyPendingShare,
         loadSummary: loadSummary,
+        loadMeta: loadMeta,
         takeSharedImage: takeSharedImage,
         leerTicket: leerTicket,
         readForm: readForm,
@@ -1488,6 +1490,35 @@
         setFormStatus(err && err.message ? err.message : 'No pudimos borrar el gasto.', 'error');
       } finally {
         setBusy(false);
+      }
+    }
+
+    /** Reemplaza las listas locales por las del backend, conservando la selección. */
+    function applyLists(categories, people) {
+      const catSelect = $('categoria');
+      const perSelect = $('persona');
+      const catValue = catSelect.value;
+      const perValue = perSelect.value;
+
+      APP_CONFIG.CATEGORIAS = categories.slice();
+      if (people && people.length) APP_CONFIG.PERSONAS = people.slice();
+
+      fillSelect(catSelect, APP_CONFIG.CATEGORIAS);
+      fillSelect(perSelect, APP_CONFIG.PERSONAS);
+
+      if (APP_CONFIG.CATEGORIAS.indexOf(catValue) > -1) catSelect.value = catValue;
+      if (APP_CONFIG.PERSONAS.indexOf(perValue) > -1) perSelect.value = perValue;
+    }
+
+    async function loadMeta() {
+      if (!state.token) return;
+      try {
+        const data = await api('meta', {}, APP_CONFIG.FETCH_TIMEOUT_MS);
+        const categories = Array.isArray(data.categories) ? data.categories.filter(Boolean) : [];
+        const people = Array.isArray(data.people) ? data.people.filter(Boolean) : [];
+        if (categories.length) applyLists(categories, people);
+      } catch (err) {
+        // Si el backend no soporta meta, quedan las listas locales del APP_CONFIG.
       }
     }
 
