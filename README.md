@@ -428,33 +428,17 @@ el token automático del repo no puede crear archivos en esa carpeta. Desde ento
 
 ## Deploy automático del backend (opcional)
 
-Por defecto, cada cambio en `backend/` hay que pegarlo en el editor de Apps Script.
-Se puede automatizar con GitHub Actions + `clasp` (configuración única):
+Se configura **una sola vez** para no volver a pegar `Code.js`: GitHub Actions + `clasp`
+suben el código y publican una versión nueva con la misma URL en cada cambio de `backend/`.
 
-1. Habilitá la **Apps Script API** en <https://script.google.com/home/usersettings>
-   con la cuenta dueña del script.
-2. Generá las credenciales de `clasp` una sola vez:
-   ```bash
-   npm install -g @google/clasp@3
-   clasp login
-   ```
-   Sin terminal propia podés usar <https://shell.cloud.google.com> (todo desde el navegador).
-3. En GitHub → **Settings → Secrets and variables → Actions**, agregá:
+**Guía detallada, secreto por secreto: [DEPLOY_AUTOMATICO.md](DEPLOY_AUTOMATICO.md)**.
 
-   | Secreto | Valor |
-   |---------|-------|
-   | `CLASPRC_JSON` | todo el contenido de `~/.clasprc.json` |
-   | `APPS_SCRIPT_ID` | ID del proyecto (Apps Script → Configuración del proyecto) |
-   | `APPS_SCRIPT_DEPLOYMENT_ID` | el `AKfycb…` de la URL `/exec` |
+Resumen: cargá 3 secretos en el repo (`CLASPRC_JSON`, `APPS_SCRIPT_ID`,
+`APPS_SCRIPT_DEPLOYMENT_ID`), copiá `tests/github-workflow-deploy.yml` a
+`.github/workflows/deploy-backend.yml` y listo.
 
-4. Copiá [`tests/github-workflow-deploy.yml`](tests/github-workflow-deploy.yml) a
-   `.github/workflows/deploy-backend.yml` (GitHub → *Add file → Create new file*).
-5. Listo: cada push a `main` que toque `backend/` sube el código y publica una versión
-   nueva **con la misma URL** (`clasp push` + `clasp deploy --deploymentId`).
-
-> ⚠️ `CLASPRC_JSON` es una credencial: va **solo** en GitHub Secrets, nunca al repo ni al chat.
-> La sesión se puede revocar en <https://myaccount.google.com/permissions> y el secreto borrar.
-> Si `clasp login` se hizo con otra cuenta (no la dueña del script), el push falla.
+> `CLASPRC_JSON` es una credencial: va solo en GitHub Secrets y se revoca en
+> <https://myaccount.google.com/permissions>.
 
 ## Git
 
