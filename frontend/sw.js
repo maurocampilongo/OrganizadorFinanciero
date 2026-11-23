@@ -10,7 +10,9 @@
  */
 'use strict';
 
-const CACHE_NAME = 'gastos-shell-v7';
+const CACHE_NAME = 'gastos-shell-v8';
+const SHARE_CACHE = 'gastos-share-v1';
+const SHARE_KEY = new URL('__shared-image', self.registration.scope).href;
 
 const SHELL = [
   './',
@@ -36,7 +38,7 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(keys.filter((key) => key !== CACHE_NAME && key !== SHARE_CACHE).map((key) => caches.delete(key)))
       )
       .then(() => self.clients.claim())
   );
@@ -48,10 +50,16 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+  const url = new URL(request.url);
+
+  // Compartir una imagen desde otra app (share_target del manifest).
+  if (request.method === 'POST' && url.origin === self.location.origin && url.pathname.endsWith('/share-target')) {
+    event.respondWith(handleShareTarget(request));
+    return;
+  }
 
   // Solo GET del mismo origen: el backend (script.google.com) y GIS quedan fuera.
   if (request.method !== 'GET') return;
-  const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
@@ -93,4 +101,29 @@ function putInCache(request, response) {
     .open(CACHE_NAME)
     .then((cache) => cache.put(request, response))
     .catch(() => {});
+}
+
+/**
+ * Guarda la imagen compartida en un cache aparte y vuelve a la app con ?shared=1.
+ * La página la consume (y la borra) cuando hay sesión iniciada.
+ */
+async function handleShareTarget(request) {
+  try {
+    const form = await request.formData();
+    let file = form.get('foto');
+    if (!file || typeof file === 'string' || !file.size) {
+      for (const value of form.values()) {
+        if (value && typeof value !== 'string' && value.size > 0) { file = value; break; }
+      }
+    }
+    if (file && typeof file !== 'string' && file.size > 0) {
+      const cache = await caches.open(SHARE_CACHE);
+      await cache.put(SHARE_KEY, new Response(file, {
+        headers: { 'Content-Type': file.type || 'image/jpeg' }
+      }));
+    }
+  } catch (err) {
+    // Si falla el parseo, igual redirigimos para que el usuario vea la app.
+  }
+  return Response.redirect(new URL('./?shared=1', self.registration.scope).href, 303);
 }

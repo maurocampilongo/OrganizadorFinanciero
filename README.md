@@ -269,6 +269,9 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 2. **Leer un ticket** (tarjeta de arriba): sacá, subí, arrastrá o pegá la foto con `Ctrl+V`.
    La imagen se comprime a 1024 px / JPEG 0.75 y Gemini completa los 5 campos solo.
    Si la lectura falla, **🔄 Leer de nuevo** reintenta sin volver a elegir la foto.
+   También podés **compartir una captura** desde otra app (Mercado Pago, homebanking, mail):
+   **Compartir → Gastos**. La app se abre con esa imagen y la lee sola. Requiere la PWA
+   instalada en Android (en iOS el menú Compartir de Safari no soporta `share_target`).
 3. Revisá el aviso amarillo **“Revisá y corregí los datos extraídos antes de guardar”**.
    Los campos autocompletados quedan con borde verde hasta que los toques, y la etiqueta
    del formulario dice **“Leído del ticket”**.

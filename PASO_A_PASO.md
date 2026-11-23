@@ -495,6 +495,8 @@ Después, en GitHub:
    - Corregí lo que haga falta y guardá.
    - También podés **arrastrar** la imagen al recuadro o **pegarla con `Ctrl+V`**; y con
      **🔄 Leer de nuevo** reintentás la lectura sin elegir la foto otra vez.
+   - En Android, desde otra app (Mercado Pago, banco, mail): **Compartir → Gastos**.
+     La PWA abre con esa captura y la lee sola. Necesita estar instalada.
 5. Verificá la fila en la planilla.
 
 **Punto de control:** la fila nueva tiene la fecha como **texto** (alineada a la
