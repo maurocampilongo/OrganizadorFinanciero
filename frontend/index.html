@@ -201,6 +201,11 @@
     .recent .r-del:hover { color: var(--err); }
     .recent-empty { color: var(--muted); font-size: 0.82rem; }
 
+    .section-actions { display: flex; align-items: center; gap: 8px; }
+    .section-actions .ghost { min-height: 32px; padding: 4px 10px; font-size: 0.76rem; }
+    .chip.is-editing { background: rgba(245, 179, 1, 0.14); border-color: rgba(245, 179, 1, 0.5); color: #ffd76a; }
+    .recent .r-edit { background: transparent; border: 0; color: var(--muted); font-size: 1rem; padding: 8px 8px; cursor: pointer; border-radius: 8px; }
+
     .date-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 8px; align-items: stretch; }
     .step {
       min-height: 50px; border-radius: 12px; border: 1px solid var(--line);
@@ -322,7 +327,10 @@
         <section class="card" id="form-card">
           <div class="section-head">
             <h2 class="section-title">Detalle del gasto</h2>
-            <span class="chip" id="form-mode">Carga manual</span>
+            <div class="section-actions">
+              <button type="button" class="ghost" id="btn-cancel-edit" hidden>Cancelar</button>
+              <span class="chip" id="form-mode">Carga manual</span>
+            </div>
           </div>
           <div class="banner banner-warn" id="review-banner" hidden></div>
 
@@ -391,7 +399,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.9.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.10.0</span></span>
     </footer>
   </div>
 
@@ -418,7 +426,7 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.9.0';
+    const VERSION = '1.10.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
     const SHARE_CACHE = 'gastos-share-v1';
@@ -439,7 +447,9 @@
       undo: null,
       undoTimer: null,
       actionDone: false,
-      sharedDone: false
+      sharedDone: false,
+      editing: null,
+      fromTicket: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -578,6 +588,7 @@
       state.token = null;
       state.exp = 0;
       state.email = '';
+      state.editing = null;
       if (state.expiryTimer) {
         clearTimeout(state.expiryTimer);
         state.expiryTimer = null;
@@ -838,14 +849,28 @@
       readButton.disabled = state.busy || !hasImage;
       readButton.textContent = state.readDone ? '🔄 Leer de nuevo' : '📖 Leer ticket';
       $('btn-quitar-foto').disabled = state.busy;
-      $('btn-save').textContent = state.saving ? 'Guardando…' : 'Guardar gasto';
+      $('btn-save').textContent = state.saving ? 'Guardando…' : (state.editing ? 'Guardar cambios' : 'Guardar gasto');
     }
 
     /** Etiqueta que indica si los datos vienen del ticket o son carga manual. */
     function setFormMode(fromTicket) {
+      state.fromTicket = Boolean(fromTicket);
+      syncFormMode();
+    }
+
+    function syncFormMode() {
       const chip = $('form-mode');
-      chip.textContent = fromTicket ? 'Leído del ticket' : 'Carga manual';
-      chip.classList.toggle('is-read', Boolean(fromTicket));
+      chip.classList.remove('is-read', 'is-editing');
+      if (state.editing) {
+        chip.textContent = 'Editando';
+        chip.classList.add('is-editing');
+      } else if (state.fromTicket) {
+        chip.textContent = 'Leído del ticket';
+        chip.classList.add('is-read');
+      } else {
+        chip.textContent = 'Carga manual';
+      }
+      $('btn-cancel-edit').hidden = !state.editing;
     }
 
     function clearPhoto() {
@@ -1085,6 +1110,7 @@
         return;
       }
 
+      const editing = state.editing;
       const data = (force && state.pendingData) ? state.pendingData : readForm();
       const problem = validate(data);
       if (problem) {
@@ -1098,20 +1124,38 @@
 
       state.saving = true;
       setBusy(true);
-      setFormStatus('Guardando…');
+      setFormStatus(editing ? 'Guardando cambios…' : 'Guardando…');
       hideDuplicate();
       try {
-        const payload = force ? Object.assign({}, data, { force: true }) : data;
-        const result = await api('save', payload, APP_CONFIG.FETCH_TIMEOUT_MS);
+        let result;
+        if (editing) {
+          result = await api('update', Object.assign({}, data, {
+            row: editing.row,
+            original: editing.original
+          }), APP_CONFIG.FETCH_TIMEOUT_MS);
+        } else {
+          const payload = force ? Object.assign({}, data, { force: true }) : data;
+          result = await api('save', payload, APP_CONFIG.FETCH_TIMEOUT_MS);
+        }
+
         state.pendingData = null;
         buzz(35);
-        setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
-        showUndo(result.row, data);
+
+        if (editing) {
+          state.editing = null;
+          state.fromTicket = false;
+          syncFormMode();
+          setFormStatus('Gasto actualizado ✔ (fila ' + result.row + ')', 'ok');
+        } else {
+          setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
+          showUndo(result.row, data);
+        }
+
         loadSummary();
         state.saving = false;
         resetAfterSave();
       } catch (err) {
-        if (err && err.code === 'DUPLICATE') {
+        if (err && err.code === 'DUPLICATE' && !editing) {
           state.pendingData = data;
           showDuplicate(err.message);
           setFormStatus('');
@@ -1122,6 +1166,47 @@
         state.saving = false;
         setBusy(false);
       }
+    }
+
+    function startEdit(item) {
+      if (state.busy || !item || !item.row) return;
+
+      state.editing = {
+        row: Number(item.row),
+        original: { fecha: item.fecha, concepto: item.concepto, monto: item.monto }
+      };
+
+      $('fecha').value = item.fecha;
+      $('concepto').value = item.concepto;
+      $('monto').value = Number(item.monto).toFixed(2);
+      if (APP_CONFIG.CATEGORIAS.indexOf(item.categoria) > -1) $('categoria').value = item.categoria;
+      if (APP_CONFIG.PERSONAS.indexOf(item.persona) > -1) $('persona').value = item.persona;
+      $('compartido').checked = !!item.compartido;
+
+      clearAutofillMarks();
+      hideReviewBanner();
+      hideDuplicate();
+      syncFormMode();
+      syncPhotoButtons();
+      setFormStatus('Editando la fila ' + item.row + '. Cambiá lo que necesites y guardá.', 'ok');
+      try { $('form-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { /* ignorado */ }
+      $('concepto').focus();
+    }
+
+    function cancelEdit() {
+      if (!state.editing) return;
+      state.editing = null;
+      state.fromTicket = false;
+      syncFormMode();
+      syncPhotoButtons();
+      $('concepto').value = '';
+      $('monto').value = '';
+      $('fecha').value = toLocalIso(new Date());
+      $('compartido').checked = false;
+      clearAutofillMarks();
+      hideReviewBanner();
+      hideDuplicate();
+      setFormStatus('Edición cancelada.');
     }
 
     function onSubmit(event) {
@@ -1451,6 +1536,15 @@
         li.appendChild(date);
         li.appendChild(concept);
         li.appendChild(amount);
+
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'r-edit';
+        edit.setAttribute('aria-label', 'Editar ' + (item.concepto || 'gasto'));
+        edit.textContent = '✏️';
+        edit.addEventListener('click', () => startEdit(item));
+
+        li.appendChild(edit);
         li.appendChild(remove);
         list.appendChild(li);
       });
@@ -1545,6 +1639,7 @@
       $('expense-form').addEventListener('submit', onSubmit);
       $('btn-force-save').addEventListener('click', () => saveExpense(true));
       $('btn-cancel-duplicate').addEventListener('click', () => { hideDuplicate(); state.pendingData = null; });
+      $('btn-cancel-edit').addEventListener('click', cancelEdit);
       $('btn-undo').addEventListener('click', undoLast);
       $('btn-summary-toggle').addEventListener('click', () => {
         const body = $('summary-body');

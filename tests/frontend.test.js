@@ -596,6 +596,54 @@ const SIGN_IN = `(() => {
     })()`);
     check('borrar desde la lista usa action=delete con la fila', delRecent.deleteBody && delRecent.deleteBody.row === 5 && delRecent.status.indexOf('eliminado') > -1, JSON.stringify(delRecent));
 
+    const editFlow = await cdp.eval(`(async () => {
+      const first = document.querySelector('#recent-list li');
+      first.querySelector('.r-edit').click();
+      const filled = {
+        fecha: document.getElementById('fecha').value,
+        concepto: document.getElementById('concepto').value,
+        monto: document.getElementById('monto').value,
+        chip: document.getElementById('form-mode').textContent,
+        editing: document.getElementById('form-mode').classList.contains('is-editing'),
+        cancelVisible: !document.getElementById('btn-cancel-edit').hidden,
+        saveLabel: document.getElementById('btn-save').textContent
+      };
+      document.getElementById('monto').value = '2222.50';
+      window.__responses.push({ ok: true, row: 5, updated: true });
+      document.getElementById('expense-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      const started = Date.now();
+      while (Date.now() - started < 5000 && document.getElementById('form-status').textContent.indexOf('actualizado') === -1) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const body = JSON.parse(window.__lastCall('update').options.body);
+      return {
+        filled: filled,
+        body: body,
+        status: document.getElementById('form-status').textContent,
+        chipAfter: document.getElementById('form-mode').textContent,
+        cancelHidden: document.getElementById('btn-cancel-edit').hidden,
+        saveLabelAfter: document.getElementById('btn-save').textContent
+      };
+    })()`);
+    check('el ✏️ carga el gasto en el formulario', editFlow.filled.fecha === '2026-11-21' && editFlow.filled.concepto === 'Luz' && editFlow.filled.monto === '2000.00', JSON.stringify(editFlow.filled));
+    check('el formulario entra en modo edición', editFlow.filled.chip === 'Editando' && editFlow.filled.editing === true && editFlow.filled.cancelVisible === true && editFlow.filled.saveLabel === 'Guardar cambios', JSON.stringify(editFlow.filled));
+    check('guardar envía action=update con fila y original', editFlow.body.action === 'update' && editFlow.body.row === 5 && editFlow.body.original.concepto === 'Luz' && editFlow.body.original.monto === 2000 && editFlow.body.monto === 2222.5, JSON.stringify(editFlow.body));
+    check('al guardar vuelve a carga manual', editFlow.status.indexOf('actualizado') > -1 && editFlow.chipAfter === 'Carga manual' && editFlow.cancelHidden === true && editFlow.saveLabelAfter === 'Guardar gasto', JSON.stringify(editFlow));
+
+    const cancelEdit = await cdp.eval(`(() => {
+      document.querySelector('#recent-list li .r-edit').click();
+      const before = document.getElementById('btn-cancel-edit').hidden;
+      document.getElementById('btn-cancel-edit').click();
+      return {
+        before: before,
+        after: document.getElementById('btn-cancel-edit').hidden,
+        concepto: document.getElementById('concepto').value,
+        monto: document.getElementById('monto').value,
+        chip: document.getElementById('form-mode').textContent
+      };
+    })()`);
+    check('Cancelar sale del modo edición y limpia', cancelEdit.before === false && cancelEdit.after === true && cancelEdit.concepto === '' && cancelEdit.monto === '' && cancelEdit.chip === 'Carga manual', JSON.stringify(cancelEdit));
+
     const meta = await cdp.eval(`(async () => {
       window.__meta = { ok: true, categories: ['Supermercado', 'Mascotas', 'Otros'], people: ['Mauro', 'Anto', 'Sofi'] };
       await __OF__.loadMeta();

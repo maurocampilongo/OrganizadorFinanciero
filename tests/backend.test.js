@@ -854,6 +854,73 @@ check('faltan Propiedades -> CONFIG (mensaje genérico)', () => {
   configure();
 });
 
+check('update edita la fila y conserva Registrado', () => {
+  resetCounters();
+  const claims = validClaims();
+  tokeninfoResponse = tokeninfoFor(claims);
+  const saved = post(saveBody({ idToken: makeToken(claims) }));
+  const row = saved.json.row;
+  const sheet = gastosSheet();
+  const registro = String(sheet.getCell(row, 6));
+
+  const res = post({
+    action: 'update',
+    idToken: makeToken(claims),
+    row: row,
+    original: { fecha: '2026-11-20', concepto: 'Coto', monto: 1500.5 },
+    fecha: '2026-11-19',
+    concepto: 'Coto Palermo',
+    monto: 2000.25,
+    categoria: 'Hogar',
+    persona: 'Anto',
+    compartido: true
+  });
+  assert.strictEqual(res.json.ok, true, res.text);
+  assert.strictEqual(res.json.updated, true);
+  assert.strictEqual(sheet.getCell(row, 1), '2026-11-19');
+  assert.strictEqual(sheet.getCell(row, 2), 'Coto Palermo');
+  assert.strictEqual(sheet.getCell(row, 3), 2000.25);
+  assert.strictEqual(sheet.getCell(row, 4), 'Hogar');
+  assert.strictEqual(sheet.getCell(row, 5), 'Anto');
+  assert.strictEqual(sheet.getCell(row, 6), registro);
+  assert.strictEqual(sheet.getCell(row, 7), true);
+});
+
+check('update no toca la fila si el original no coincide', () => {
+  resetCounters();
+  const claims = validClaims();
+  tokeninfoResponse = tokeninfoFor(claims);
+  const saved = post(saveBody({ idToken: makeToken(claims) }));
+  const row = saved.json.row;
+  const sheet = gastosSheet();
+  const antes = String(sheet.getCell(row, 2));
+
+  const res = post({
+    action: 'update',
+    idToken: makeToken(claims),
+    row: row,
+    original: { fecha: '2026-11-20', concepto: 'Coto', monto: 999 },
+    fecha: '2026-11-19',
+    concepto: 'Otro',
+    monto: 10,
+    categoria: 'Otros',
+    persona: 'Mauro'
+  });
+  assert.strictEqual(res.json.error, 'CONFLICT');
+  assert.strictEqual(sheet.getCell(row, 2), antes);
+});
+
+check('update valida la fila y los datos nuevos', () => {
+  resetCounters();
+  const claims = validClaims();
+  tokeninfoResponse = tokeninfoFor(claims);
+  const saved = post(saveBody({ idToken: makeToken(claims) }));
+  const row = saved.json.row;
+  const base = { action: 'update', idToken: makeToken(claims), row: row, original: { fecha: '2026-11-20', concepto: 'Coto', monto: 1500.5 } };
+  assert.strictEqual(post(Object.assign({}, base, { fecha: '2026-11-20', concepto: 'X', monto: 0, categoria: 'Otros', persona: 'Mauro' })).json.error, 'BAD_REQUEST');
+  assert.strictEqual(post(Object.assign({}, base, { row: 99999, fecha: '2026-11-20', concepto: 'X', monto: 10, categoria: 'Otros', persona: 'Mauro' })).json.error, 'BAD_REQUEST');
+});
+
 check('summary agrega hoy, mes, personas, compartidos y categorías', () => {
   resetCounters();
   const claims = validClaims();

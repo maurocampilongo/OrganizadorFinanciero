@@ -493,6 +493,7 @@ Después, en GitHub:
    - La foto se comprime (vas a ver algo como `Foto lista (2.4 MB → 180 KB)`).
    - Aparece el aviso amarillo de revisión y los campos en verde.
    - Corregí lo que haga falta y guardá.
+   - Para **editar** un gasto: *Detalle* del resumen → ✏️ → *Guardar cambios*.
    - También podés **arrastrar** la imagen al recuadro o **pegarla con `Ctrl+V`**; y con
      **🔄 Leer de nuevo** reintentás la lectura sin elegir la foto otra vez.
    - En Android, desde otra app (Mercado Pago, banco, mail): **Compartir → Gastos**.

@@ -36,7 +36,7 @@
 
 'use strict';
 
-var VERSION = '1.8.0';
+var VERSION = '1.9.0';
 
 /**
  * Valores de referencia.
@@ -351,7 +351,7 @@ function doPost(e) {
 
     var action = typeof body.action === 'string' ? body.action.trim() : '';
     if (action === 'ping') return ok_({ version: VERSION });
-    if (action !== 'extract' && action !== 'save' && action !== 'delete' && action !== 'summary' && action !== 'meta') {
+    if (action !== 'extract' && action !== 'save' && action !== 'delete' && action !== 'summary' && action !== 'meta' && action !== 'update') {
       return fail_('BAD_REQUEST', 'Acción desconocida.');
     }
 
@@ -385,6 +385,7 @@ function doPost(e) {
       return fail_('LIMIT', 'Demasiados guardados seguidos. Esperá un minuto.');
     }
     if (action === 'delete') return handleDelete_(body);
+    if (action === 'update') return handleUpdate_(body);
     if (action === 'summary') return handleSummary_();
     return handleSave_(body);
 
@@ -905,24 +906,112 @@ function normalizeExtraction_(raw) {
  * 6. Guardado en Google Sheets
  * ========================================================================== */
 
-function handleSave_(body) {
+function parseExpense_(body) {
   var fecha = typeof body.fecha === 'string' ? body.fecha.trim() : '';
-  if (!isValidIsoDate_(fecha)) return fail_('BAD_REQUEST', 'La fecha no es válida.');
+  if (!isValidIsoDate_(fecha)) return { ok: false, error: 'La fecha no es válida.' };
 
   var concepto = cleanConcepto_(body.concepto);
-  if (!concepto) return fail_('BAD_REQUEST', 'El concepto no puede estar vacío.');
+  if (!concepto) return { ok: false, error: 'El concepto no puede estar vacío.' };
 
   var monto = parseAmount_(body.monto);
-  if (!isFinite(monto) || monto <= 0) return fail_('BAD_REQUEST', 'El monto debe ser mayor a cero.');
-  if (monto > CONFIG.MAX_MONTO) return fail_('BAD_REQUEST', 'El monto es demasiado alto.');
+  if (!isFinite(monto) || monto <= 0) return { ok: false, error: 'El monto debe ser mayor a cero.' };
+  if (monto > CONFIG.MAX_MONTO) return { ok: false, error: 'El monto es demasiado alto.' };
 
   var categoria = matchFromList_(body.categoria, CONFIG.CATEGORIES);
-  if (!categoria) return fail_('BAD_REQUEST', 'Elegí una categoría válida.');
+  if (!categoria) return { ok: false, error: 'Elegí una categoría válida.' };
 
   var persona = matchFromList_(body.persona, CONFIG.PEOPLE);
-  if (!persona) return fail_('BAD_REQUEST', 'Elegí quién hizo el gasto.');
+  if (!persona) return { ok: false, error: 'Elegí quién hizo el gasto.' };
 
-  var compartido = parseBoolean_(body.compartido);
+  return {
+    ok: true,
+    fecha: fecha,
+    concepto: concepto,
+    monto: monto,
+    categoria: categoria,
+    persona: persona,
+    compartido: parseBoolean_(body.compartido)
+  };
+}
+
+/** Arma la fila respetando el orden de HEADERS. */
+function buildRowValues_(expense) {
+  return CONFIG.HEADERS.map(function (header) {
+    switch (header) {
+      case 'Fecha': return sanitizeCell_(expense.fecha);
+      case 'Concepto': return expense.concepto;
+      case 'Monto': return expense.monto;
+      case 'Categoría': return sanitizeCell_(expense.categoria);
+      case 'Quién': return sanitizeCell_(expense.persona);
+      case 'Registrado': return sanitizeCell_(expense.registro);
+      case 'Compartido': return expense.compartido;
+      default: return '';
+    }
+  });
+}
+
+/** Edita una fila solo si los datos originales siguen coincidiendo. */
+function handleUpdate_(body) {
+  var row = Number(body.row);
+  if (!(row >= 2 && row <= 1000000)) return fail_('BAD_REQUEST', 'La fila no es válida.');
+
+  var original = body.original || {};
+  var oFecha = typeof original.fecha === 'string' ? original.fecha.trim() : '';
+  var oConcepto = collapseSpaces_(original.concepto);
+  var oMonto = parseAmount_(original.monto);
+  if (!isValidIsoDate_(oFecha) || !oConcepto || !isFinite(oMonto)) {
+    return fail_('BAD_REQUEST', 'Faltan los datos para verificar la fila.');
+  }
+
+  var parsed = parseExpense_(body);
+  if (!parsed.ok) return fail_('BAD_REQUEST', parsed.error);
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(CONFIG.LOCK_TIMEOUT_MS)) {
+    return fail_('BUSY', 'El servidor está ocupado. Reintentá en unos segundos.');
+  }
+
+  try {
+    var sheet = getSheet_();
+    if (row > sheet.getLastRow()) return fail_('BAD_REQUEST', 'Esa fila ya no existe.');
+
+    var values = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length).getValues()[0];
+    var sameFecha = String(values[0]) === oFecha;
+    var sameConcepto = collapseSpaces_(values[1]).toLowerCase() === oConcepto.toLowerCase();
+    var sameMonto = Math.abs(Number(values[2]) - oMonto) < 0.005;
+
+    if (!sameFecha || !sameConcepto || !sameMonto) {
+      return fail_('CONFLICT', 'La fila cambió; no la editamos.', 'row ' + row + ' no coincide');
+    }
+
+    var registro = values[5] instanceof Date
+      ? Utilities.formatDate(values[5], scriptTimeZone_(), 'yyyy-MM-dd HH:mm:ss')
+      : String(values[5] || '');
+
+    var range = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length);
+    range.setNumberFormats([rowFormats_()]);
+    range.setValues([buildRowValues_({
+      fecha: parsed.fecha,
+      concepto: parsed.concepto,
+      monto: parsed.monto,
+      categoria: parsed.categoria,
+      persona: parsed.persona,
+      registro: registro,
+      compartido: parsed.compartido
+    })]);
+    SpreadsheetApp.flush();
+
+    return ok_({ row: row, updated: true, fecha: parsed.fecha, monto: parsed.monto });
+  } catch (err) {
+    return fail_('INTERNAL', 'No pudimos editar el gasto.', 'update: ' + (err && err.stack ? err.stack : err));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleSave_(body) {
+  var parsed = parseExpense_(body);
+  if (!parsed.ok) return fail_('BAD_REQUEST', parsed.error);
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(CONFIG.LOCK_TIMEOUT_MS)) {
@@ -934,12 +1023,12 @@ function handleSave_(body) {
 
     if (!parseBoolean_(body.force)) {
       var duplicateRow = findDuplicateRow_(sheet, {
-        fecha: fecha,
-        concepto: concepto,
-        monto: monto,
-        categoria: categoria,
-        persona: persona,
-        compartido: compartido
+        fecha: parsed.fecha,
+        concepto: parsed.concepto,
+        monto: parsed.monto,
+        categoria: parsed.categoria,
+        persona: parsed.persona,
+        compartido: parsed.compartido
       });
       if (duplicateRow) {
         return json_({
@@ -953,27 +1042,19 @@ function handleSave_(body) {
 
     var row = sheet.getLastRow() + 1;
     var range = sheet.getRange(row, 1, 1, CONFIG.HEADERS.length);
-
-    // Formato ANTES de escribir: la fecha y el registro quedan como texto y
-    // Sheets no los reinterpreta como fecha/hora.
     range.setNumberFormats([rowFormats_()]);
-    var registro = timestamp_();
-    var rowValues = CONFIG.HEADERS.map(function (header) {
-      switch (header) {
-        case 'Fecha': return sanitizeCell_(fecha);
-        case 'Concepto': return concepto;
-        case 'Monto': return monto;
-        case 'Categoría': return sanitizeCell_(categoria);
-        case 'Quién': return sanitizeCell_(persona);
-        case 'Registrado': return sanitizeCell_(registro);
-        case 'Compartido': return compartido;
-        default: return '';
-      }
-    });
-    range.setValues([rowValues]);
+    range.setValues([buildRowValues_({
+      fecha: parsed.fecha,
+      concepto: parsed.concepto,
+      monto: parsed.monto,
+      categoria: parsed.categoria,
+      persona: parsed.persona,
+      registro: timestamp_(),
+      compartido: parsed.compartido
+    })]);
     SpreadsheetApp.flush();
 
-    return ok_({ row: row, fecha: fecha, monto: monto });
+    return ok_({ row: row, fecha: parsed.fecha, monto: parsed.monto });
   } catch (err) {
     return fail_('INTERNAL', 'No pudimos guardar el gasto. Reintentá.', 'save: ' + (err && err.stack ? err.stack : err));
   } finally {
@@ -981,7 +1062,6 @@ function handleSave_(body) {
   }
 }
 
-/** Devuelve la fila de un gasto idéntico entre las últimas 5 (0 si no hay). */
 function findDuplicateRow_(sheet, candidate) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return 0;

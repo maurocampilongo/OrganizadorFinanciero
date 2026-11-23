@@ -285,7 +285,10 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 
 Arriba de todo tenés el **resumen del mes** (compacto). Tocá **Detalle** para ver el
 total por persona, los compartidos, el top de categorías y los **últimos gastos**, con
-un tacho para borrar cualquiera de ellos. Se actualiza solo al guardar o borrar.
+un **✏️ para editarlo** o un **🗑 para borrarlo**. Se actualiza solo al guardar, editar o borrar.
+
+Para **editar** un gasto: **Detalle** en el resumen → **✏️** → el formulario entra en modo
+edición (chip *Editando*, botón *Guardar cambios*) y podés **Cancelar** sin tocar nada.
 
 Si preferís cargar a mano, usá la tarjeta **Detalle del gasto** (la etiqueta dice
 **“Carga manual”**): los mismos campos (más el interruptor), sin foto.
@@ -405,7 +408,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 Las tres suites viven en `tests/` y no tienen dependencias npm:
 
 ```bash
-npm test              # corre las 3 (~220 checks)
+npm test              # corre las 3 (~228 checks)
 npm run test:static   # HTML/JS/CSP/manifest, sin navegador
 npm run test:backend  # simulación de Apps Script (auth, Gemini, Sheets, límites)
 npm run test:frontend # Chromium headless: UI, fechas, fotos, PWA, share target
@@ -414,8 +417,8 @@ npm run test:frontend # Chromium headless: UI, fechas, fotos, PWA, share target
 | Suite | Cobertura | Checks |
 |-------|-----------|--------|
 | `static` | HTML/JS inline, CSP, IDs, manifest, iconos, sin credenciales | 40 |
-| `backend` | auth JWT, extracción, cadena de modelos, guardado, duplicados, deshacer, resumen, auditoría | 77 |
-| `frontend` | render, fechas, compresión, extracción, guardado, sesión, PWA, offline, share target, resumen, meta | 103 |
+| `backend` | auth JWT, extracción, cadena de modelos, guardado, edición, duplicados, deshacer, resumen, auditoría | 80 |
+| `frontend` | render, fechas, compresión, extracción, guardado, edición, sesión, PWA, offline, share target, resumen, meta | 108 |
 
 Requiere Node 22+ y un Chromium del sistema (`CHROME_BIN` para indicar otro).
 El workflow está en [`tests/github-workflow.yml`](tests/github-workflow.yml) y se copia
