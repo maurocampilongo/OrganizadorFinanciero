@@ -354,7 +354,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.6.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.7.0</span></span>
     </footer>
   </div>
 
@@ -381,9 +381,11 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.6.0';
+    const VERSION = '1.7.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
+    const SHARE_CACHE = 'gastos-share-v1';
+    const SHARE_KEY = new URL('__shared-image', new URL('./', location.href)).href;
 
     const state = {
       token: null,
@@ -399,7 +401,8 @@
       pendingData: null,
       undo: null,
       undoTimer: null,
-      actionDone: false
+      actionDone: false,
+      sharedDone: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -550,7 +553,10 @@
       $('app-card').hidden = !signedIn;
       $('userbox').hidden = !signedIn;
       $('user-email').textContent = signedIn ? (state.email || 'Sesión iniciada') : '';
-      if (signedIn) setTimeout(applyPendingAction, 250);
+      if (signedIn) {
+        setTimeout(applyPendingAction, 250);
+        setTimeout(applyPendingShare, 350);
+      }
     }
 
     function scheduleExpiry() {
@@ -1276,6 +1282,8 @@
         },
         applyExtraction: applyExtraction,
         handleFile: handleFile,
+        applyPendingShare: applyPendingShare,
+        takeSharedImage: takeSharedImage,
         leerTicket: leerTicket,
         readForm: readForm,
         validate: validate,
@@ -1285,6 +1293,43 @@
         handleCredential: handleCredential,
         logout: logout
       };
+    }
+
+    async function takeSharedImage() {
+      if (!('caches' in window)) return null;
+      try {
+        const cache = await caches.open(SHARE_CACHE);
+        const response = await cache.match(SHARE_KEY);
+        if (!response) return null;
+        await cache.delete(SHARE_KEY);
+        const blob = await response.blob();
+        if (!blob || !blob.size) return null;
+        return new File([blob], 'compartida.jpg', { type: blob.type || 'image/jpeg' });
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /** Si la app se abrió con ?shared=1, toma la imagen del cache y la lee. */
+    async function applyPendingShare() {
+      if (state.sharedDone) return;
+      const params = new URLSearchParams(location.search);
+      if (params.get('shared') !== '1') return;
+      state.sharedDone = true;
+
+      try {
+        params.delete('shared');
+        const query = params.toString();
+        history.replaceState(null, '', location.pathname + (query ? '?' + query : ''));
+      } catch (err) { /* ignorado */ }
+
+      setFotoStatus('Foto recibida. Leyendo el ticket…');
+      const file = await takeSharedImage();
+      if (!file) {
+        setFotoStatus('No encontramos la imagen compartida. Probá de nuevo.', 'error');
+        return;
+      }
+      await handleFile(file);
     }
 
     function init() {
