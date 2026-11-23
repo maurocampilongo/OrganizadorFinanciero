@@ -477,6 +477,8 @@ Después, en GitHub:
 3. Abrí el ícono instalado: tiene que verse a pantalla completa, sin barra de
    direcciones (eso confirma `display: standalone`).
 4. Iniciá sesión y cargá un gasto real **con foto**:
+   - La pantalla tiene dos tarjetas: **Leer un ticket** (arriba) y **Detalle del gasto**
+     (abajo); la etiqueta de la segunda dice *Carga manual* o *Leído del ticket*.
    - La foto se comprime (vas a ver algo como `Foto lista (2.4 MB → 180 KB)`).
    - Aparece el aviso amarillo de revisión y los campos en verde.
    - Corregí lo que haga falta y guardá.
