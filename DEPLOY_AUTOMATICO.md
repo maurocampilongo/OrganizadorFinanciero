@@ -240,6 +240,24 @@ Listo: de acá en adelante, cualquier cambio en `backend/` que se pushee a `main
 
 ---
 
+## Si la credencial se filtró
+
+Si `~/.clasprc.json` (o el `refresh_token`) se pegó en un chat, un issue o una captura:
+
+1. **Revocá el acceso ya**: <https://myaccount.google.com/permissions> → **Google Apps Script**
+   → *Quitar acceso*. Eso invalida el `refresh_token` al instante.
+2. Volvé a loguearte en Cloud Shell: `clasp login`.
+3. Actualizá el secreto sin copiar:
+   ```bash
+   gh secret set CLASPRC_JSON --repo maurocampilongo/OrganizadorFinanciero < ~/.clasprc.json
+   ```
+4. Re-corré el deploy (`gh workflow run deploy-backend.yml --repo maurocampilongo/OrganizadorFinanciero`)
+   para confirmar que el secreto nuevo funciona.
+
+> El `client_id` y el `client_secret` que aparecen en `.clasprc.json` son los de la app pública
+> de `clasp` (los mismos para todos los usuarios). Lo verdaderamente sensible es el
+> **`refresh_token`**: permite actuar en tu nombre hasta que lo revoques.
+
 ## Seguridad
 
 - `CLASPRC_JSON` es una credencial de larga duración (refresh token). Vive **solo** en GitHub Secrets.
