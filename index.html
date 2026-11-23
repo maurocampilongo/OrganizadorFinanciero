@@ -70,7 +70,7 @@
     }
     .brand-text { display: flex; flex-direction: column; min-width: 0; }
     .brand-title { font-weight: 700; font-size: 1.05rem; line-height: 1.15; }
-    .brand-sub { color: var(--muted); font-size: 0.76rem; text-transform: capitalize; }
+    .brand-sub { color: var(--muted); font-size: 0.76rem; }
     .userbox { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .email { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.76rem; }
 
@@ -334,9 +334,10 @@
 
     function formatLongDate(date) {
       try {
-        return new Intl.DateTimeFormat('es-AR', {
+        const text = new Intl.DateTimeFormat('es-AR', {
           weekday: 'long', day: 'numeric', month: 'long'
         }).format(date);
+        return text.charAt(0).toUpperCase() + text.slice(1);
       } catch (err) {
         return toLocalIso(date);
       }
