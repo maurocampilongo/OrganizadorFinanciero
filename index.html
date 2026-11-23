@@ -181,6 +181,26 @@
       color: #7ce0a8; font-size: 0.88rem;
     }
 
+    .summary-card { padding: 16px 18px; }
+    .summary-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .summary-label { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .summary-total { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
+    .summary-meta { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .summary-body { margin-top: 14px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+    .summary-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .summary-chip { border: 1px solid var(--line); background: var(--card-2); border-radius: 999px; padding: 5px 10px; font-size: 0.78rem; color: var(--text); }
+    .summary-chip strong { color: var(--accent-2); font-weight: 600; }
+    .summary-cats { margin-top: 10px; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+    .summary-h3 { margin: 14px 0 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .recent li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--card-2); }
+    .recent .r-date { color: var(--muted); font-size: 0.72rem; min-width: 40px; }
+    .recent .r-concept { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
+    .recent .r-amount { font-size: 0.85rem; font-weight: 600; }
+    .recent .r-del { background: transparent; border: 0; color: var(--muted); font-size: 1.05rem; padding: 8px 10px; cursor: pointer; border-radius: 8px; }
+    .recent .r-del:hover { color: var(--err); }
+    .recent-empty { color: var(--muted); font-size: 0.82rem; }
+
     .date-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 8px; align-items: stretch; }
     .step {
       min-height: 50px; border-radius: 12px; border: 1px solid var(--line);
@@ -257,6 +277,23 @@
       </section>
 
       <div id="app-card" hidden>
+        <section class="card summary-card" id="summary-card" hidden>
+          <div class="summary-head">
+            <div>
+              <div class="summary-label">Este mes</div>
+              <div class="summary-total" id="summary-total">—</div>
+              <div class="summary-meta" id="summary-meta"></div>
+            </div>
+            <button type="button" class="ghost" id="btn-summary-toggle" aria-expanded="false" aria-controls="summary-body">Detalle</button>
+          </div>
+          <div class="summary-body" id="summary-body" hidden>
+            <div class="summary-chips" id="summary-chips"></div>
+            <div class="summary-cats" id="summary-cats"></div>
+            <h3 class="summary-h3">Últimos gastos</h3>
+            <ul class="recent" id="recent-list"></ul>
+          </div>
+        </section>
+
         <section class="card" id="ticket-card">
           <div class="section-head">
             <h2 class="section-title">📷 Leer un ticket</h2>
@@ -354,7 +391,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.7.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.8.0</span></span>
     </footer>
   </div>
 
@@ -381,7 +418,7 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.7.0';
+    const VERSION = '1.8.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
     const SHARE_CACHE = 'gastos-share-v1';
@@ -556,6 +593,7 @@
       if (signedIn) {
         setTimeout(applyPendingAction, 250);
         setTimeout(applyPendingShare, 350);
+        setTimeout(loadSummary, 450);
       }
     }
 
@@ -1031,6 +1069,7 @@
         hideUndo();
         buzz(20);
         setFormStatus('Gasto eliminado.', 'ok');
+        loadSummary();
       } catch (err) {
         setFormStatus(err && err.message ? err.message : 'No pudimos borrar el gasto.', 'error');
       } finally {
@@ -1067,6 +1106,7 @@
         buzz(35);
         setFormStatus('Guardado ✔' + (result.row ? ' (fila ' + result.row + ')' : ''), 'ok');
         showUndo(result.row, data);
+        loadSummary();
         state.saving = false;
         resetAfterSave();
       } catch (err) {
@@ -1283,6 +1323,7 @@
         applyExtraction: applyExtraction,
         handleFile: handleFile,
         applyPendingShare: applyPendingShare,
+        loadSummary: loadSummary,
         takeSharedImage: takeSharedImage,
         leerTicket: leerTicket,
         readForm: readForm,
@@ -1332,6 +1373,124 @@
       await handleFile(file);
     }
 
+    function money(value, decimals) {
+      const amount = Number(value) || 0;
+      try {
+        return new Intl.NumberFormat('es-AR', {
+          style: 'currency', currency: 'ARS',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: typeof decimals === 'number' ? decimals : 0
+        }).format(amount);
+      } catch (err) {
+        return '$ ' + amount.toFixed(2);
+      }
+    }
+
+    function renderSummary(data) {
+      const hoy = (data && data.hoy) || { count: 0, total: 0 };
+      const mes = (data && data.mes) || { count: 0, total: 0 };
+      $('summary-total').textContent = money(mes.total, 0);
+      $('summary-meta').textContent = mes.count + (mes.count === 1 ? ' gasto este mes' : ' gastos este mes') + ' · hoy ' + money(hoy.total, 0);
+
+      const chips = $('summary-chips');
+      chips.replaceChildren();
+      ((data && data.personas) || []).forEach((persona) => {
+        const chip = document.createElement('span');
+        chip.className = 'summary-chip';
+        chip.appendChild(document.createTextNode(persona.nombre + ' '));
+        const strong = document.createElement('strong');
+        strong.textContent = money(persona.total, 0);
+        chip.appendChild(strong);
+        chips.appendChild(chip);
+      });
+      const shared = document.createElement('span');
+      shared.className = 'summary-chip';
+      shared.appendChild(document.createTextNode('Compartido '));
+      const sharedAmount = document.createElement('strong');
+      sharedAmount.textContent = money(data && data.compartido ? data.compartido.si : 0, 0);
+      shared.appendChild(sharedAmount);
+      chips.appendChild(shared);
+
+      const cats = $('summary-cats');
+      const topCats = (data && data.categorias) || [];
+      cats.textContent = topCats.length
+        ? 'Top: ' + topCats.map((c) => c.nombre + ' ' + money(c.total, 0)).join(' · ')
+        : '';
+
+      const list = $('recent-list');
+      list.replaceChildren();
+      const ultimos = (data && data.ultimos) || [];
+      if (!ultimos.length) {
+        const empty = document.createElement('li');
+        empty.className = 'recent-empty';
+        empty.textContent = 'Todavía no hay gastos.';
+        list.appendChild(empty);
+        return;
+      }
+
+      ultimos.forEach((item) => {
+        const li = document.createElement('li');
+        const date = document.createElement('span');
+        date.className = 'r-date';
+        const iso = String(item.fecha || '');
+        date.textContent = iso.slice(8, 10) + '/' + iso.slice(5, 7);
+        const concept = document.createElement('span');
+        concept.className = 'r-concept';
+        concept.textContent = item.concepto || '(sin concepto)';
+        const amount = document.createElement('span');
+        amount.className = 'r-amount';
+        amount.textContent = money(item.monto, 2);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'r-del';
+        remove.setAttribute('aria-label', 'Borrar ' + (item.concepto || 'gasto'));
+        remove.textContent = '🗑';
+        remove.addEventListener('click', () => deleteRecent(item));
+        li.appendChild(date);
+        li.appendChild(concept);
+        li.appendChild(amount);
+        li.appendChild(remove);
+        list.appendChild(li);
+      });
+    }
+
+    async function loadSummary() {
+      if (!state.token) return;
+      try {
+        const data = await api('summary', {}, APP_CONFIG.FETCH_TIMEOUT_MS);
+        renderSummary(data);
+        $('summary-card').hidden = false;
+      } catch (err) {
+        // El resumen es informativo: nunca bloquea la carga de gastos.
+      }
+    }
+
+    async function deleteRecent(item) {
+      if (state.busy || !item || !item.row) return;
+      let confirmed = true;
+      try {
+        confirmed = window.confirm('¿Borrar ' + (item.concepto || 'este gasto') + ' de ' + money(item.monto, 2) + '?');
+      } catch (err) { confirmed = true; }
+      if (!confirmed) return;
+
+      setBusy(true);
+      try {
+        await api('delete', {
+          row: item.row,
+          fecha: item.fecha,
+          concepto: item.concepto,
+          monto: item.monto
+        }, APP_CONFIG.FETCH_TIMEOUT_MS);
+        buzz(20);
+        setFormStatus('Gasto eliminado.', 'ok');
+        await loadSummary();
+      } catch (err) {
+        setFormStatus(err && err.message ? err.message : 'No pudimos borrar el gasto.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
     function init() {
       $('version-label').textContent = 'v' + VERSION;
 
@@ -1356,6 +1515,13 @@
       $('btn-force-save').addEventListener('click', () => saveExpense(true));
       $('btn-cancel-duplicate').addEventListener('click', () => { hideDuplicate(); state.pendingData = null; });
       $('btn-undo').addEventListener('click', undoLast);
+      $('btn-summary-toggle').addEventListener('click', () => {
+        const body = $('summary-body');
+        const open = body.hidden;
+        body.hidden = !open;
+        $('btn-summary-toggle').setAttribute('aria-expanded', String(open));
+        $('btn-summary-toggle').textContent = open ? 'Ocultar' : 'Detalle';
+      });
 
       ['fecha', 'concepto', 'monto', 'categoria', 'persona'].forEach((id) => {
         const element = $(id);
