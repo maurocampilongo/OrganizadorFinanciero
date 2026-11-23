@@ -267,7 +267,9 @@ En iPhone: Safari → Compartir → *Agregar a pantalla de inicio*.
 
 ## Uso diario
 
-1. Abrí la app e ingresá con Google (la sesión dura ~1 hora y se renueva volviendo a entrar).
+1. Abrí la app e ingresá con Google. La sesión se guarda en el teléfono (`localStorage`)
+   y **se renueva sola** si Google tiene tu cuenta activa (`auto_select`), así no te pide
+   login cada vez que compartís una imagen. **Salir** la borra y desactiva el auto-login.
 2. **Leer un ticket** (tarjeta de arriba): sacá, subí, arrastrá o pegá la foto con `Ctrl+V`.
    La imagen se comprime a 1024 px / JPEG 0.75 y Gemini completa los 5 campos solo.
    Si la lectura falla, **🔄 Leer de nuevo** reintenta sin volver a elegir la foto.
@@ -343,7 +345,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 | Entrada | allowlists de categoría/persona, fecha real validada, monto numérico con tope, concepto ≤ 120, body ≤ 8 MB, imagen ≤ 6 MB base64 |
 | Inyección de fórmulas | `sanitizeCell_()` antepone `'` a `= + - @` y quita caracteres de control |
 | Salida | errores genéricos al cliente; el detalle va al log con `redact_()` (borra la key) |
-| Sesión en el navegador | `sessionStorage`, expiración verificada, cierre automático 1 minuto antes y borrado ante `AUTH` |
+| Sesión en el navegador | `localStorage` + `auto_select` de Google, `exp` verificado, cierre 1 minuto antes y borrado ante `AUTH`; **Salir** la elimina y desactiva el auto-login |
 | Navegador | CSP, sin `innerHTML`, `referrer=no-referrer`, `noindex`, backend restringido a `script.google.com/.../exec`, `credentials: 'omit'` |
 | Abuso | rate limit por email con `CacheService`: 60/min global, 15/min extracciones, 30/min guardados |
 | Diagnóstico | `selfTest()` no imprime secretos; `auditSheet()` no imprime importes ni conceptos |

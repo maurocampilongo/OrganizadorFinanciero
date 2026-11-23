@@ -399,7 +399,7 @@
 
     <footer class="footer">
       <button type="button" class="ghost" id="btn-install" hidden>Instalar en el celular</button>
-      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.10.0</span></span>
+      <span class="muted tiny">Organizador Financiero · <span id="version-label">v1.11.0</span></span>
     </footer>
   </div>
 
@@ -426,7 +426,7 @@
       EXPIRY_MARGIN_MS: 60000
     };
 
-    const VERSION = '1.10.0';
+    const VERSION = '1.11.0';
 
     const PHOTO_HINT = 'Tocá para sacar la foto, arrastrala acá o pegala con Ctrl+V.';
     const SHARE_CACHE = 'gastos-share-v1';
@@ -575,13 +575,31 @@
       state.token = token;
       state.exp = Number(payload.exp) * 1000;
       state.email = String(payload.email || '');
+      const stored = JSON.stringify({ token: state.token, exp: state.exp, email: state.email });
       try {
-        sessionStorage.setItem(APP_CONFIG.SESSION_KEY, JSON.stringify({
-          token: state.token,
-          exp: state.exp,
-          email: state.email
-        }));
+        // localStorage (no sessionStorage): al compartir una imagen Android abre la PWA
+        // en otra ventana y sessionStorage estaría vacío.
+        localStorage.setItem(APP_CONFIG.SESSION_KEY, stored);
       } catch (err) { /* modo privado: seguimos solo en memoria */ }
+      try { sessionStorage.removeItem(APP_CONFIG.SESSION_KEY); } catch (err) { /* ignorado */ }
+    }
+
+    function readStoredSession() {
+      const key = APP_CONFIG.SESSION_KEY;
+      let raw = null;
+      try { raw = localStorage.getItem(key); } catch (err) { raw = null; }
+      if (!raw) {
+        // Migración desde la versión anterior (sessionStorage).
+        try {
+          raw = sessionStorage.getItem(key);
+          if (raw) {
+            localStorage.setItem(key, raw);
+            sessionStorage.removeItem(key);
+          }
+        } catch (err) { /* ignorado */ }
+      }
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch (err) { return null; }
     }
 
     function clearSession() {
@@ -593,6 +611,7 @@
         clearTimeout(state.expiryTimer);
         state.expiryTimer = null;
       }
+      try { localStorage.removeItem(APP_CONFIG.SESSION_KEY); } catch (err) { /* ignorado */ }
       try { sessionStorage.removeItem(APP_CONFIG.SESSION_KEY); } catch (err) { /* ignorado */ }
     }
 
@@ -640,8 +659,7 @@
     }
 
     function restoreSession() {
-      let stored = null;
-      try { stored = JSON.parse(sessionStorage.getItem(APP_CONFIG.SESSION_KEY) || 'null'); } catch (err) { stored = null; }
+      const stored = readStoredSession();
       if (!stored || typeof stored.token !== 'string' || !stored.token) return;
 
       const payload = decodeJwtPayload(stored.token);
@@ -696,7 +714,9 @@
         client_id: APP_CONFIG.CLIENT_ID,
         callback: handleCredential,
         ux_mode: 'popup',
-        auto_select: false,
+        // Retoma la sesión sola cuando Google ya tiene la cuenta activa
+        // (evita pedir login en cada “Compartir → Gastos”).
+        auto_select: true,
         cancel_on_tap_outside: true
       });
 
@@ -711,7 +731,8 @@
         width: 280
       });
 
-      try { window.google.accounts.id.disableAutoSelect(); } catch (err) { /* ignorado */ }
+      // No desactivamos auto-select acá: queremos que retome la sesión sola.
+      // Se desactiva recién cuando el usuario toca “Salir” (logout).
     }
 
     /* ======================================================================
@@ -1411,6 +1432,8 @@
         applyPendingShare: applyPendingShare,
         loadSummary: loadSummary,
         loadMeta: loadMeta,
+        restoreSession: restoreSession,
+        saveSession: saveSession,
         takeSharedImage: takeSharedImage,
         leerTicket: leerTicket,
         readForm: readForm,

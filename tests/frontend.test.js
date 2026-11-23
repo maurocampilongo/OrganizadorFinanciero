@@ -776,20 +776,32 @@ const SIGN_IN = `(() => {
         appHidden: document.getElementById('app-card').hidden,
         loginStatus: document.getElementById('login-status').textContent,
         token: __OF__.state.token,
-        stored: sessionStorage.getItem('of.sesion.v1')
+        stored: localStorage.getItem('of.sesion.v1')
       };
     })()`);
     check('AUTH cierra la sesión y vuelve al login', authFail.loginVisible === true && authFail.appHidden === true, JSON.stringify(authFail));
     check('explica que la sesión venció', authFail.loginStatus.indexOf('venció') > -1, authFail.loginStatus);
-    check('borra token y sessionStorage', authFail.token === null && authFail.stored === null);
+    check('borra token y localStorage', authFail.token === null && authFail.stored === null);
 
     console.log('\n== Persistencia de sesión ==');
+    const savedSession = await cdp.eval(`(() => {
+      const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
+      const exp = Math.floor(Date.now() / 1000) + 1800;
+      const payload = btoa(JSON.stringify({ email: 'yo@gmail.com', exp: exp }));
+      __OF__.saveSession(header + '.' + payload + '.f', { email: 'yo@gmail.com', exp: exp });
+      return {
+        inLocal: !!localStorage.getItem('of.sesion.v1'),
+        inSession: !!sessionStorage.getItem('of.sesion.v1'),
+        token: !!__OF__.state.token
+      };
+    })()`);
+    check('el login guarda la sesión en localStorage', savedSession.inLocal === true && savedSession.inSession === false && savedSession.token === true, JSON.stringify(savedSession));
     await cdp.eval(SIGN_IN);
     await cdp.eval(`(() => {
       const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
       const exp = Math.floor(Date.now() / 1000) + 3600;
       const payload = btoa(JSON.stringify({ email: 'yo@gmail.com', exp: exp }));
-      sessionStorage.setItem('of.sesion.v1', JSON.stringify({ token: header + '.' + payload + '.f', exp: exp * 1000, email: 'yo@gmail.com' }));
+      localStorage.setItem('of.sesion.v1', JSON.stringify({ token: header + '.' + payload + '.f', exp: exp * 1000, email: 'yo@gmail.com' }));
       return true;
     })()`);
     await cdp.navigate(APP_URL);
@@ -801,20 +813,39 @@ const SIGN_IN = `(() => {
     check('restaura la sesión al recargar', restored.appVisible === true && restored.loginHidden === true);
     check('restaura el email', restored.email === 'yo@gmail.com', restored.email);
 
+    // Migración desde la versión anterior (sessionStorage)
     await cdp.eval(`(() => {
       const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
-      const exp = Math.floor(Date.now() / 1000) - 3600;
+      const exp = Math.floor(Date.now() / 1000) + 3600;
       const payload = btoa(JSON.stringify({ email: 'yo@gmail.com', exp: exp }));
+      localStorage.removeItem('of.sesion.v1');
       sessionStorage.setItem('of.sesion.v1', JSON.stringify({ token: header + '.' + payload + '.f', exp: exp * 1000, email: 'yo@gmail.com' }));
       return true;
     })()`);
     await cdp.navigate(APP_URL);
-    const expired = await cdp.eval(`({
-      loginVisible: !document.getElementById('login-card').hidden,
-      appHidden: document.getElementById('app-card').hidden,
-      stored: sessionStorage.getItem('of.sesion.v1')
+    const migrated = await cdp.eval(`({
+      appVisible: !document.getElementById('app-card').hidden,
+      inLocal: !!localStorage.getItem('of.sesion.v1'),
+      inSession: !!sessionStorage.getItem('of.sesion.v1')
     })`);
-    check('ignora y borra una sesión vencida', expired.loginVisible === true && expired.appHidden === true && expired.stored === null, JSON.stringify(expired));
+    check('migra la sesión vieja a localStorage', migrated.appVisible === true && migrated.inLocal === true && migrated.inSession === false, JSON.stringify(migrated));
+
+    const expired = await cdp.eval(`(() => {
+      const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
+      const exp = Math.floor(Date.now() / 1000) - 3600;
+      const payload = btoa(JSON.stringify({ email: 'yo@gmail.com', exp: exp }));
+      __OF__.setSignedIn(false);
+      __OF__.state.token = null;
+      localStorage.setItem('of.sesion.v1', JSON.stringify({ token: header + '.' + payload + '.f', exp: exp * 1000, email: 'yo@gmail.com' }));
+      __OF__.restoreSession();
+      return {
+        loginVisible: !document.getElementById('login-card').hidden,
+        appHidden: document.getElementById('app-card').hidden,
+        token: __OF__.state.token,
+        stored: localStorage.getItem('of.sesion.v1')
+      };
+    })()`);
+    check('ignora y borra una sesión vencida', expired.loginVisible === true && expired.appHidden === true && expired.token === null && expired.stored === null, JSON.stringify(expired));
 
     console.log('\n== PWA / Service Worker ==');
     await cdp.send('Network.enable');
