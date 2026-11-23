@@ -46,6 +46,9 @@ var CONFIG = {
   SHEET_ID: '',
 
   GEMINI_MODEL: 'gemini-2.5-flash',
+  GEMINI_MODEL_FALLBACK: 'gemini-2.0-flash',
+  GEMINI_MAX_ATTEMPTS: 2,
+  GEMINI_RETRY_MS: 800,
   SHEET_NAME: 'Gastos',
   HEADERS: ['Fecha', 'Concepto', 'Monto', 'Categoría', 'Quién', 'Registrado'],
 
@@ -530,72 +533,10 @@ function handleExtract_(body) {
  * La API key viaja en el header x-goog-api-key (no en la URL).
  */
 function geminiExtract_(base64, mimeType) {
-  var apiKey = setting_('GEMINI_API_KEY');
-  if (isPlaceholder_(apiKey)) {
-    return {
-      ok: false,
-      code: 'CONFIG',
-      message: 'Falta configurar la API key de Gemini en el servidor.',
-      detail: 'GEMINI_API_KEY ausente'
-    };
-  }
+  var result = geminiRequest_(base64, mimeType);
+  if (!result.ok) return geminiFailure_(result);
 
-  var url = CONFIG.GEMINI_ENDPOINT + '/' + encodeURIComponent(CONFIG.GEMINI_MODEL) + ':generateContent';
-  var payload = {
-    contents: [{
-      role: 'user',
-      parts: [
-        { text: buildPrompt_() },
-        { inline_data: { mime_type: mimeType, data: base64 } }
-      ]
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      topP: 0.8,
-      maxOutputTokens: 700,
-      responseMimeType: 'application/json',
-      responseSchema: geminiSchema_(),
-      thinkingConfig: { thinkingBudget: 0 }
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
-    ]
-  };
-
-  var response;
-  try {
-    response = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'x-goog-api-key': apiKey },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      code: 'UPSTREAM',
-      message: 'No pudimos contactar a la IA. Revisá tu conexión.',
-      detail: 'gemini fetch: ' + (err && err.message)
-    };
-  }
-
-  var status = response.getResponseCode();
-  var text = response.getContentText() || '';
-
-  if (status === 429) {
-    return { ok: false, code: 'QUOTA', message: 'Se alcanzó el límite de la IA. Esperá un minuto y reintentá.', detail: 'gemini 429' };
-  }
-  if (status === 400 || status === 401 || status === 403) {
-    return { ok: false, code: 'CONFIG', message: 'La IA rechazó la solicitud. Avisale al administrador.', detail: 'gemini ' + status + ' ' + text.slice(0, 400) };
-  }
-  if (status !== 200) {
-    return { ok: false, code: 'UPSTREAM', message: 'La IA no está disponible ahora. Reintentá en un rato.', detail: 'gemini ' + status + ' ' + text.slice(0, 400) };
-  }
-
+  var text = result.text;
   var data;
   try {
     data = JSON.parse(text);
@@ -630,7 +571,113 @@ function geminiExtract_(base64, mimeType) {
     return { ok: false, code: 'UPSTREAM', message: 'La IA devolvió un formato inesperado. Reintentá o cargá a mano.', detail: 'json: ' + output.slice(0, 300) };
   }
 
-  return { ok: true, data: parsed };
+  return { ok: true, data: parsed, model: result.model };
+}
+
+/** Traduce un fallo de Gemini a un mensaje accionable para la PWA. */
+function geminiFailure_(result) {
+  var status = result.status || 0;
+  var detail = (result.detail || '') + (result.text ? ' ' + result.text.slice(0, 400) : '');
+
+  if (result.code === 'CONFIG') {
+    return { ok: false, code: 'CONFIG', message: 'Falta configurar la API key de Gemini en el servidor.', detail: detail };
+  }
+  if (status === 429) {
+    return { ok: false, code: 'QUOTA', message: 'Se alcanzó el límite de la IA. Esperá un minuto y reintentá.', detail: detail };
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return { ok: false, code: 'CONFIG', message: 'La IA rechazó la solicitud. Avisale al administrador.', detail: detail };
+  }
+  if (status === 404) {
+    return { ok: false, code: 'CONFIG', message: 'El modelo de IA configurado no está disponible. Avisale al administrador.', detail: detail };
+  }
+  if (!status) {
+    return { ok: false, code: 'UPSTREAM', message: 'No pudimos contactar a la IA. Revisá tu conexión.', detail: detail };
+  }
+  return { ok: false, code: 'UPSTREAM', message: 'La IA no está disponible ahora (HTTP ' + status + '). Reintentá en un rato.', detail: detail };
+}
+
+/** Payload para un modelo concreto. thinkingConfig solo existe en la familia 2.5. */
+function geminiPayload_(model, base64, mimeType) {
+  var generationConfig = {
+    temperature: 0.1,
+    topP: 0.8,
+    maxOutputTokens: 700,
+    responseMimeType: 'application/json',
+    responseSchema: geminiSchema_()
+  };
+  if (/^gemini-2\.5/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+
+  return {
+    contents: [{
+      role: 'user',
+      parts: [
+        { text: buildPrompt_() },
+        { inline_data: { mime_type: mimeType, data: base64 } }
+      ]
+    }],
+    generationConfig: generationConfig,
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
+    ]
+  };
+}
+
+/**
+ * Llama a Gemini con reintento ante 5xx y caída a un modelo alternativo.
+ * Devuelve { ok, status, text, model, detail }.
+ */
+function geminiRequest_(base64, mimeType) {
+  var apiKey = setting_('GEMINI_API_KEY');
+  if (isPlaceholder_(apiKey)) {
+    return { ok: false, code: 'CONFIG', status: 0, model: CONFIG.GEMINI_MODEL, detail: 'GEMINI_API_KEY ausente', text: '' };
+  }
+
+  var models = [CONFIG.GEMINI_MODEL];
+  if (CONFIG.GEMINI_MODEL_FALLBACK && CONFIG.GEMINI_MODEL_FALLBACK !== CONFIG.GEMINI_MODEL) {
+    models.push(CONFIG.GEMINI_MODEL_FALLBACK);
+  }
+
+  var last = { ok: false, status: 0, model: models[0], detail: 'sin intentos', text: '' };
+
+  for (var i = 0; i < models.length; i++) {
+    var model = models[i];
+    var url = CONFIG.GEMINI_ENDPOINT + '/' + encodeURIComponent(model) + ':generateContent';
+    var payload = geminiPayload_(model, base64, mimeType);
+
+    for (var attempt = 1; attempt <= CONFIG.GEMINI_MAX_ATTEMPTS; attempt++) {
+      var response;
+      try {
+        response = UrlFetchApp.fetch(url, {
+          method: 'post',
+          contentType: 'application/json',
+          headers: { 'x-goog-api-key': apiKey },
+          payload: JSON.stringify(payload),
+          muteHttpExceptions: true
+        });
+      } catch (err) {
+        last = { ok: false, status: 0, model: model, detail: 'fetch: ' + (err && err.message), text: '' };
+        break;
+      }
+
+      var status = response.getResponseCode();
+      var text = response.getContentText() || '';
+
+      if (status === 200) return { ok: true, status: status, text: text, model: model };
+
+      last = { ok: false, status: status, model: model, text: text, detail: 'gemini ' + status };
+      // 429 / 400 / 401 / 403 no mejoran reintentando ni cambiando de modelo.
+      if (status === 429 || status === 400 || status === 401 || status === 403) return last;
+      // 404: el modelo no existe para esta key; probamos el alternativo.
+      if (status === 404) break;
+      if (attempt < CONFIG.GEMINI_MAX_ATTEMPTS) Utilities.sleep(CONFIG.GEMINI_RETRY_MS * attempt);
+    }
+  }
+
+  return last;
 }
 
 function geminiSchema_() {

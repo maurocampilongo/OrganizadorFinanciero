@@ -287,7 +287,7 @@ Detalles del formulario:
 | Personas | `CONFIG.PEOPLE` **y** `APP_CONFIG.PERSONAS` | idem |
 | Nombre de la hoja | `CONFIG.SHEET_NAME` | por defecto `Gastos` |
 | Columnas | `CONFIG.HEADERS` | si las cambiás en una hoja existente, `setup()` reescribe la fila 1 |
-| Modelo de IA | `CONFIG.GEMINI_MODEL` | por defecto `gemini-2.5-flash` |
+| Modelo de IA | `CONFIG.GEMINI_MODEL` (y `GEMINI_MODEL_FALLBACK`) | por defecto `gemini-2.5-flash`, con `gemini-2.0-flash` de respaldo |
 | Compresión de foto | `APP_CONFIG.MAX_IMAGE_WIDTH` y `JPEG_QUALITY` | 1024 px y 0.75 |
 | Límites del backend | `CONFIG.MAX_MONTO`, `MAX_BODY_CHARS`, `MAX_IMAGE_BASE64_CHARS` | si los subís, revisá el tamaño de la imagen comprimida |
 
@@ -357,6 +357,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 | “El servidor no está configurado todavía” | faltan Propiedades del script | corré `selfTest()` y cargá las que marca |
 | “La IA rechazó la solicitud” | API key inválida, API deshabilitada o proyecto sin acceso | `selfTest(true)` y revisá la key en AI Studio |
 | “Se alcanzó el límite de la IA” | cuota gratuita agotada momentáneamente | esperá un minuto y reintentá |
+| “La IA no está disponible ahora (HTTP 5xx)” | sobrecarga/caída transitoria de Gemini | reintentá; el backend ya reintenta y cae a `gemini-2.0-flash` |
 | “No pudimos conectar con el servidor” | URL mal copiada, sin internet o implementación privada | usá la URL `/exec` y *Acceso: Cualquier persona* |
 | Error de CORS / preflight | se cambió el `Content-Type` a `application/json` | dejá `text/plain;charset=utf-8` (ya está así) |
 | La app no ofrece instalarse | falta HTTPS/manifest/SW o ya está instalada | abrí la URL de Pages en Chrome, no un archivo local |

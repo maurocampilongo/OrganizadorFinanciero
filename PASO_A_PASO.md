@@ -533,6 +533,7 @@ la versión publicada anterior hasta que deployes.
 | `Falta configurar la API key de Gemini en el servidor.` | falta `GEMINI_API_KEY` | cargala en Propiedades |
 | `La IA rechazó la solicitud. Avisale al administrador.` | key inválida, API deshabilitada o key restringida | `selfTest(true)` y mirá el log de ejecución |
 | `Se alcanzó el límite de la IA. Esperá un minuto y reintentá.` | cuota 429 | esperá o revisá el plan en AI Studio |
+| `La IA no está disponible ahora (HTTP 5xx). Reintentá en un rato.` | sobrecarga transitoria de Gemini | reintentá; el backend reintenta y usa el modelo de respaldo |
 | `La IA no devolvió datos. Sacá otra foto o cargá a mano.` | foto ilegible / no es un ticket | mejor luz, encuadre o carga manual |
 | `Demasiadas fotos seguidas. Esperá un minuto.` | rate limit (15/min) | esperá 60 s |
 | `No pudimos conectar con el servidor. Revisá tu conexión.` | URL mal, implementación privada/borrada o sin internet | probá el `curl` del paso 8 |
