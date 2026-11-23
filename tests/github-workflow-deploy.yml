@@ -49,27 +49,49 @@ jobs:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
           python3 - <<'PY'
-          import json, os, sys
-          raw = os.environ.get('CLASPRC_JSON', '').strip()
-          if not raw:
+          import json, os, re, sys
+
+          raw = os.environ.get('CLASPRC_JSON', '').replace('\ufeff', '')
+          if not raw.strip():
               print('::error::Falta el secreto CLASPRC_JSON')
               sys.exit(1)
-          try:
-              data, end = json.JSONDecoder().raw_decode(raw)
-          except Exception as exc:
-              print('::error::CLASPRC_JSON no es JSON valido: ' + str(exc))
+
+          attempts = [('tal cual', raw.strip()), ('sin saltos', re.sub(r'[\r\n\t]', '', raw).strip())]
+          start, end = raw.find('{'), raw.rfind('}')
+          if start > -1 and end > start:
+              cut = raw[start:end + 1]
+              attempts.append(('recortado', cut))
+              attempts.append(('recortado y sin saltos', re.sub(r'[\r\n\t]', '', cut)))
+
+          data = None
+          errors = []
+          for label, candidate in attempts:
+              try:
+                  parsed, idx = json.JSONDecoder().raw_decode(candidate)
+              except Exception as exc:
+                  errors.append(label + ': ' + str(exc))
+                  continue
+              if isinstance(parsed, dict) and 'tokens' in parsed:
+                  data = parsed
+                  print('Credenciales: OK (' + label + ')')
+                  if label != 'tal cual':
+                      print('::warning::Se normalizo CLASPRC_JSON (' + label + '). Conviene re-copiarlo en una sola linea.')
+                  leftover = candidate[idx:].strip()
+                  if leftover:
+                      print('::warning::Se ignoro texto extra despues del JSON: ' + leftover[:60])
+                  break
+
+          if data is None:
+              print('::error::CLASPRC_JSON no es JSON valido')
+              for err in errors:
+                  print('  - ' + err)
               sys.exit(1)
-          leftover = raw[end:].strip()
-          if leftover:
-              print('::warning::Se ignoro texto extra despues del JSON: ' + leftover[:80])
-          if 'tokens' not in data:
-              print('::error::CLASPRC_JSON no tiene "tokens": revisa que copiaste el archivo correcto')
-              sys.exit(1)
+
           path = os.path.expanduser('~/.clasprc.json')
           with open(path, 'w', encoding='utf-8') as fh:
               fh.write(json.dumps(data))
           os.chmod(path, 0o600)
-          print('Credenciales OK')
+          print('Escrito ' + path)
           PY
 
       - name: Configurar el proyecto

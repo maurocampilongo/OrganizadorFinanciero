@@ -123,6 +123,29 @@ Si tenés `jq`: `jq -c . ~/.clasprc.json` hace lo mismo.
 
 > GitHub no te deja volver a leer el valor después. Si lo cargaste mal, se edita y se pega de nuevo.
 
+### 1.4 Opción sin copiar (recomendada): `gh secret set`
+
+En **Cloud Shell**, con la misma cuenta de GitHub, se sube el archivo tal cual (sin pasar por
+el portapapeles, que es lo que suele romper el JSON con saltos de línea):
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+# → te da un código; abrilo en https://github.com/login/device y autorizá
+
+gh secret set CLASPRC_JSON --repo maurocampilongo/OrganizadorFinanciero < ~/.clasprc.json
+gh secret set APPS_SCRIPT_ID --repo maurocampilongo/OrganizadorFinanciero --body "1AbC..."
+gh secret set APPS_SCRIPT_DEPLOYMENT_ID --repo maurocampilongo/OrganizadorFinanciero --body "AKfycb..."
+
+gh secret list --repo maurocampilongo/OrganizadorFinanciero   # verificar los 3 nombres
+```
+
+Después, para reintentar el deploy:
+
+```bash
+gh workflow run deploy-backend.yml --repo maurocampilongo/OrganizadorFinanciero
+gh run list --repo maurocampilongo/OrganizadorFinanciero --limit 3
+```
+
 ---
 
 ## Secreto 2 — `APPS_SCRIPT_ID`
@@ -207,6 +230,7 @@ Listo: de acá en adelante, cualquier cambio en `backend/` que se pushee a `main
 |---|---|---|
 | `Could not find credentials` / `Could not read credentials` | `CLASPRC_JSON` vacío, cortado o con comillas extra | Volver a copiar el archivo completo |
 | `Unexpected non-whitespace character after JSON` | el secreto tiene **texto extra** después del JSON (típico: el prompt de la shell) | volver a copiarlo con el comando de arriba, o actualizar el workflow (ya lo tolera) |
+| `Invalid control character at …` | el secreto tiene un **salto de línea dentro de un string** (se rompió al copiar una línea larga) | subirlo con `gh secret set < ~/.clasprc.json` (sin copiar) o actualizar el workflow (lo normaliza) |
 | `invalid_grant` / `Token has been expired or revoked` | la sesión se revocó o venció | `clasp login` de nuevo y actualizar el secreto |
 | `The caller does not have permission` (403) | el login se hizo con otra cuenta | repetir el login con la cuenta dueña |
 | `User has not enabled the Apps Script API` | falta el toggle | activarlo en <https://script.google.com/home/usersettings> |
