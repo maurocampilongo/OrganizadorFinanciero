@@ -160,7 +160,9 @@ Después, en el editor de Apps Script:
    (Sheets y llamadas externas).
 2. Elegí **`selfTest`** → **Ejecutar** → en el registro tiene que decir
    `PROBLEMAS (0)` y mostrarte de dónde sale cada secreto (`properties`).
-3. Opcional: `selfTest(true)` hace 1 request real a Gemini (consume cuota).
+3. Opcional: elegí **`probarGemini`** y Ejecutar (prueba los dos modelos, consume 1–2 requests).
+   También existe `selfTest(true)`, pero desde el menú de funciones no se le pueden pasar
+   parámetros: por eso está el atajo `probarGemini`.
 4. Opcional: si ya tenías datos de AppSheet, corré **`auditSheet`** y pegá la salida:
    no muestra importes ni conceptos, solo conteos y números de fila.
 
@@ -184,7 +186,7 @@ y `selfTest()` te dice exactamente cuál falta. Las Propiedades del script
    curl -sS -X POST "https://script.google.com/macros/s/XXXX/exec" \
      -H 'Content-Type: text/plain' \
      --data '{"action":"ping"}'
-   # -> {"ok":true,"version":"1.1.0"}
+   # -> {"ok":true,"version":"1.1.1"}
    ```
 
 > Cada cambio de código necesita una **nueva versión**. `clasp deploy` sin más crea
@@ -347,7 +349,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 
 - [ ] `APP_CONFIG.CLIENT_ID` y `BACKEND_URL` completos (sin `PEGAR_`).
 - [ ] Script Properties cargadas y `selfTest()` con `PROBLEMAS (0)`.
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.1"}`.
 - [ ] Implementación: *Ejecutar como* vos y *Acceso* **Cualquier persona**.
 - [ ] Origen `https://TU_USUARIO.github.io` autorizado en Cloud Console.
 - [ ] `git status` no muestra `.clasp.json` ni `.clasprc.json`.
@@ -362,7 +364,7 @@ secreta sino de un `idToken` firmado por Google que se valida en cada request.
 | No aparece el botón de Google | origen no autorizado, Client ID inválido o red bloqueada | agregá `https://TU_USUARIO.github.io` (sin path) en *Orígenes de JavaScript* |
 | “Sesión inválida o vencida” al guardar | token de 1 h vencido **o** email distinto al autorizado | volvé a entrar; revisá `AUTHORIZED_EMAIL` |
 | “El servidor no está configurado todavía” | faltan Propiedades del script | corré `selfTest()` y cargá las que marca |
-| “La IA rechazó la solicitud” | API key inválida, API deshabilitada o proyecto sin acceso | `selfTest(true)` y revisá la key en AI Studio |
+| “La IA rechazó la solicitud” | API key inválida, API deshabilitada o proyecto sin acceso | `probarGemini` y revisá la key en AI Studio |
 | “Se alcanzó el límite de la IA” | cuota gratuita agotada momentáneamente | esperá un minuto y reintentá |
 | “La IA no está disponible ahora (HTTP 5xx)” | sobrecarga/caída transitoria de Gemini | reintentá; el backend ya reintenta y cae a `gemini-2.0-flash` |
 | “No pudimos conectar con el servidor” | URL mal copiada, sin internet o implementación privada | usá la URL `/exec` y *Acceso: Cualquier persona* |

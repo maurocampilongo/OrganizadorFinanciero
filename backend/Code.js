@@ -32,7 +32,7 @@
 
 'use strict';
 
-var VERSION = '1.1.0';
+var VERSION = '1.1.1';
 
 /**
  * Valores de referencia.
@@ -1004,7 +1004,7 @@ function selfTest(runGemini) {
     line('Gemini: ' + (probe.ok ? 'OK (' + CONFIG.GEMINI_MODEL + ')' : 'FALLA — ' + probe.detail));
     if (!probe.ok) problems.push('Gemini no respondió: ' + probe.detail);
   } else {
-    line('Gemini: OMITIDO (usá selfTest(true) para probarlo; consume 1 request)');
+    line('Gemini: OMITIDO (corré probarGemini() para probarlo; consume 1 request)');
   }
 
   line('');
@@ -1019,11 +1019,39 @@ function selfTest(runGemini) {
   return lines.join('\n');
 }
 
-function geminiPing_() {
+/**
+ * Diagnóstico de la IA desde el menú de funciones (no recibe parámetros).
+ * Prueba el modelo principal y el de respaldo y muestra el error exacto.
+ */
+function probarGemini() {
+  var lines = [];
+  lines.push('== prueba de Gemini (key: ' + maskSecret_(setting_('GEMINI_API_KEY')) + ') ==');
+
+  [CONFIG.GEMINI_MODEL, CONFIG.GEMINI_MODEL_FALLBACK].forEach(function (model) {
+    if (!model) return;
+    var result = geminiPing_(model);
+    lines.push(model + ': ' + (result.ok ? 'OK' : 'FALLA — ' + result.detail));
+  });
+
+  lines.push('');
+  lines.push('Si ves ACCESS_TOKEN_TYPE_UNSUPPORTED: generá una clave AIza en Cloud Console');
+  lines.push('(Credenciales → Crear credenciales → Clave de API) y restringila a Generative Language API.');
+  lines.push('Si ves 503/500: es sobrecarga transitoria; el backend reintenta y usa el respaldo.');
+
+  console.log(lines.join('\n'));
+  return lines.join('\n');
+}
+
+function geminiPing_(model) {
+  model = model || CONFIG.GEMINI_MODEL;
   var apiKey = setting_('GEMINI_API_KEY');
   if (isPlaceholder_(apiKey)) return { ok: false, detail: 'falta la API key' };
 
-  var url = CONFIG.GEMINI_ENDPOINT + '/' + encodeURIComponent(CONFIG.GEMINI_MODEL) + ':generateContent';
+  // thinkingConfig solo existe en la familia 2.5: el respaldo 2.0 lo rechazaría.
+  var generationConfig = { temperature: 0, maxOutputTokens: 8 };
+  if (/^gemini-2\.5/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+
+  var url = CONFIG.GEMINI_ENDPOINT + '/' + encodeURIComponent(model) + ':generateContent';
   try {
     var response = UrlFetchApp.fetch(url, {
       method: 'post',
@@ -1031,7 +1059,7 @@ function geminiPing_() {
       headers: { 'x-goog-api-key': apiKey },
       payload: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: 'Respondé solo con la palabra OK.' }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 8, thinkingConfig: { thinkingBudget: 0 } }
+        generationConfig: generationConfig
       }),
       muteHttpExceptions: true
     });

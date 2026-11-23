@@ -306,7 +306,7 @@ configurado`).
    ```
 4. Elegí **`selfTest`** → **Ejecutar**. Esperado:
    ```
-   == Organizador Financiero — selfTest 1.1.0 ==
+   == Organizador Financiero — selfTest 1.1.1 ==
    Zona horaria del script: America/Argentina/Buenos_Aires | Hoy: 2026-11-22
 
    AUTHORIZED_EMAIL: properties -> m***o@gmail.com
@@ -318,15 +318,17 @@ configurado`).
    Zona horaria de la planilla: America/Argentina/Buenos_Aires
    Hoja "Gastos": 1 filas | encabezados OK
 
-   Gemini: OMITIDO (usá selfTest(true) para probarlo; consume 1 request)
+   Gemini: OMITIDO (corré probarGemini() para probarlo; consume 1 request)
 
    PROBLEMAS (0)
    ADVERTENCIAS (0)
 
    RESULTADO: listo para usar.
    ```
-5. Opcional: **`selfTest(true)`** hace una llamada real a Gemini para confirmar
-   que la key y el modelo responden (consume 1 request gratuito).
+5. Opcional: **`probarGemini`** (función sin parámetros) prueba el modelo principal y el de
+   respaldo y muestra el error exacto (consume 1–2 requests). También existe
+   `selfTest(true)`, pero el menú de funciones no permite pasarle argumentos: por eso el
+   atajo es `probarGemini`.
 6. Opcional, si ya cargabas gastos con AppSheet: elegí **`auditSheet`** → **Ejecutar**.
    Es de solo lectura y no muestra importes ni conceptos: solo conteos y filas a
    revisar (fechas inválidas, montos en texto, categorías fuera de lista, fórmulas,
@@ -364,7 +366,7 @@ Si hay problemas, el detalle te dice qué propiedad falta o qué no puede abrir.
 HTTP/2 200
 content-type: application/json; charset=utf-8
 
-{"ok":true,"version":"1.1.0"}
+{"ok":true,"version":"1.1.1"}
 ```
 
 | Si en vez de eso ves… | Significa |
@@ -499,9 +501,9 @@ izquierda), el monto con dos decimales y la columna `Registrado` con fecha y hor
 
 ## 14. Verificación final (5 minutos)
 
-- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.0"}`.
+- [ ] `curl` al `/exec` devuelve `{"ok":true,"version":"1.1.1"}`.
 - [ ] `selfTest()` devuelve `PROBLEMAS (0)` y `RESULTADO: listo para usar.`
-- [ ] `selfTest(true)` responde `Gemini: OK (gemini-2.5-flash)`.
+- [ ] `probarGemini` muestra `gemini-2.5-flash: OK` (y el respaldo también).
 - [ ] Login desde la URL de Pages con tu cuenta.
 - [ ] Gasto manual: aparece en la hoja, con fecha texto y monto numérico.
 - [ ] Gasto por foto: banner de revisión + 5 campos autocompletados.
@@ -537,7 +539,7 @@ la versión publicada anterior hasta que deployes.
 | `El servidor no está configurado todavía.` | falta `AUTHORIZED_EMAIL` o la planilla no abre | `selfTest()` y cargá lo que marque |
 | `Sesión inválida o vencida. Volvé a iniciar sesión.` | token vencido (1 h), email distinto o `aud` distinto | volvé a entrar; revisá que el Client ID sea el mismo en front y back |
 | `Falta configurar la API key de Gemini en el servidor.` | falta `GEMINI_API_KEY` | cargala en Propiedades |
-| `La IA rechazó la solicitud. Avisale al administrador.` | key inválida, API deshabilitada o key restringida | `selfTest(true)` y mirá el log de ejecución |
+| `La IA rechazó la solicitud. Avisale al administrador.` | key inválida, API deshabilitada o key restringida | `probarGemini` y mirá el log de ejecución |
 | `Se alcanzó el límite de la IA. Esperá un minuto y reintentá.` | cuota 429 | esperá o revisá el plan en AI Studio |
 | `La IA no está disponible ahora (HTTP 5xx). Reintentá en un rato.` | sobrecarga transitoria de Gemini | reintentá; el backend reintenta y usa el modelo de respaldo |
 | `La IA no devolvió datos. Sacá otra foto o cargá a mano.` | foto ilegible / no es un ticket | mejor luz, encuadre o carga manual |
